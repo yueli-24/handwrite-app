@@ -130,7 +130,7 @@ export const usePreviewGenerator = () => {
           throw new Error('服务器响应缺少预览数据');
         }
       } catch (fetchError) {
-        if (fetchError.name === 'AbortError') {
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
           throw new Error('请求超时，请稍后重试');
         }
         throw fetchError;
