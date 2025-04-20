@@ -4,7 +4,7 @@
     { "src": "package.json", "use": "@vercel/next" }
   ],
   "routes": [
-    { "src": "/api/python/(.*)", "dest": "/api/python/$1" },
+    { "src": "/api/generate", "dest": "/api/python/generate.py" },
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "env": {

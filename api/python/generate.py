@@ -275,10 +275,8 @@ def generate_preview(text, font_size=8, margin_top=35, margin_bottom=25,
     """生成预览图像和G代码"""
     log_debug("开始生成预览")
     
-    # 使用内置默认字体
-    font_path = None
-    
     # 尝试查找字体文件
+    font_path = None
     possible_font_paths = [
         os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
         os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
@@ -318,11 +316,12 @@ def handler(request):
     try:
         # 记录详细的环境信息，帮助调试
         log_debug("===== 开始处理请求 =====")
-        log_debug(f"Python版本: {sys.version}")
         log_debug(f"当前工作目录: {os.getcwd()}")
         log_debug(f"目录内容: {os.listdir('.')}")
+        log_debug(f"Python版本: {sys.version}")
+        log_debug(f"Python路径: {sys.path}")
         
-        # 安全地获取请求属性
+        # 获取请求方法
         request_method = getattr(request, 'method', 'UNKNOWN')
         log_debug(f"请求方法: {request_method}")
         
@@ -337,7 +336,7 @@ def handler(request):
                 "headers": {
                     "Content-Type": "application/json",
                     "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "POST, OPTIONS",
+                    "Access-Control-Allow-Methods": "POST",
                     "Access-Control-Allow-Headers": "Content-Type"
                 }
             }
@@ -350,28 +349,29 @@ def handler(request):
                 body = request.body
             elif hasattr(request, 'read') and callable(request.read):
                 body = request.read()
+            elif hasattr(request, 'json') and callable(request.json):
+                body = request.json()
             
             if not body:
+                log_debug("无法获取请求体")
                 return {
                     "statusCode": 400,
                     "body": json.dumps({
-                        "error": "请求体为空",
-                        "trace": "Empty request body"
+                        "error": "无法获取请求体",
+                        "trace": "No request body found"
                     }),
                     "headers": {
                         "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Methods": "POST, OPTIONS",
-                        "Access-Control-Allow-Headers": "Content-Type"
+                        "Access-Control-Allow-Origin": "*"
                     }
                 }
             
             # 解析JSON
             try:
-                if isinstance(body, bytes):
-                    data = json.loads(body.decode('utf-8'))
-                else:
+                if isinstance(body, str):
                     data = json.loads(body)
+                else:
+                    data = body
             except json.JSONDecodeError as e:
                 log_debug(f"JSON解析错误: {str(e)}")
                 return {
@@ -382,17 +382,15 @@ def handler(request):
                     }),
                     "headers": {
                         "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Methods": "POST, OPTIONS",
-                        "Access-Control-Allow-Headers": "Content-Type"
+                        "Access-Control-Allow-Origin": "*"
                     }
                 }
             
             # 验证必要参数
-            required_params = ['text', 'fontSize', 'marginTop', 'marginBottom', 
-                             'marginLeft', 'marginRight', 'paperSize']
+            required_params = ['text']
             missing_params = [param for param in required_params if param not in data]
             if missing_params:
+                log_debug(f"缺少必要参数: {missing_params}")
                 return {
                     "statusCode": 400,
                     "body": json.dumps({
@@ -401,54 +399,82 @@ def handler(request):
                     }),
                     "headers": {
                         "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Methods": "POST, OPTIONS",
-                        "Access-Control-Allow-Headers": "Content-Type"
+                        "Access-Control-Allow-Origin": "*"
                     }
                 }
             
+            # 获取参数
+            text = data.get('text', '')
+            font_size = int(data.get('fontSize', 8))
+            margin_top = int(data.get('marginTop', 35))
+            margin_bottom = int(data.get('marginBottom', 25))
+            margin_left = int(data.get('marginLeft', 30))
+            margin_right = int(data.get('marginRight', 30))
+            paper_size = data.get('paperSize', 'A4')
+            
+            # 验证参数
+            if not text.strip():
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps({
+                        "error": "文本内容不能为空",
+                        "trace": "Empty text content"
+                    }),
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*"
+                    }
+                }
+            
+            # 尝试查找字体文件
+            font_path = None
+            possible_font_paths = [
+                os.path.join(os.getcwd(), 'fonts', 'simsun.ttf'),
+                os.path.join(os.getcwd(), 'api', 'python', 'fonts', 'simsun.ttf'),
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'
+            ]
+            
+            for path in possible_font_paths:
+                if os.path.exists(path):
+                    font_path = path
+                    log_debug(f"找到字体文件: {font_path}")
+                    break
+            
             # 生成预览
             try:
-                preview_base64, gcode_content = generate_preview(
-                    text=data['text'],
-                    font_size=data['fontSize'],
-                    margin_top=data['marginTop'],
-                    margin_bottom=data['marginBottom'],
-                    margin_left=data['marginLeft'],
-                    margin_right=data['marginRight'],
-                    paper_size=data['paperSize']
+                generator = HandwritingGenerator(
+                    font_path=font_path,
+                    font_size=font_size,
+                    margin_top=margin_top,
+                    margin_bottom=margin_bottom,
+                    margin_left=margin_left,
+                    margin_right=margin_right,
+                    paper_size=paper_size
                 )
                 
-                # 创建响应
-                response_data = {
+                preview_base64, gcode_content = generator.process_text(text)
+                
+                # 构建响应
+                response = {
                     "success": True,
                     "sessionId": str(uuid.uuid4()),
                     "previewBase64": preview_base64,
                     "gcodeContent": gcode_content
                 }
                 
-                # 验证响应数据
-                if not isinstance(response_data, dict):
-                    raise ValueError("响应数据必须是字典类型")
-                if not isinstance(response_data.get('previewBase64', []), list):
-                    raise ValueError("previewBase64必须是列表类型")
-                if not isinstance(response_data.get('gcodeContent', []), list):
-                    raise ValueError("gcodeContent必须是列表类型")
-                
                 return {
                     "statusCode": 200,
-                    "body": json.dumps(response_data),
+                    "body": json.dumps(response),
                     "headers": {
                         "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Methods": "POST, OPTIONS",
-                        "Access-Control-Allow-Headers": "Content-Type"
+                        "Access-Control-Allow-Origin": "*"
                     }
                 }
                 
             except Exception as e:
                 log_debug(f"生成预览时出错: {str(e)}")
-                log_debug(f"错误详情: {traceback.format_exc()}")
+                log_debug(f"错误堆栈: {traceback.format_exc()}")
                 return {
                     "statusCode": 500,
                     "body": json.dumps({
@@ -457,15 +483,13 @@ def handler(request):
                     }),
                     "headers": {
                         "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Methods": "POST, OPTIONS",
-                        "Access-Control-Allow-Headers": "Content-Type"
+                        "Access-Control-Allow-Origin": "*"
                     }
                 }
                 
         except Exception as e:
             log_debug(f"处理请求时出错: {str(e)}")
-            log_debug(f"错误详情: {traceback.format_exc()}")
+            log_debug(f"错误堆栈: {traceback.format_exc()}")
             return {
                 "statusCode": 500,
                 "body": json.dumps({
@@ -474,16 +498,13 @@ def handler(request):
                 }),
                 "headers": {
                     "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type"
+                    "Access-Control-Allow-Origin": "*"
                 }
             }
             
     except Exception as e:
-        # 捕获所有未处理的异常
-        log_debug(f"未捕获的异常: {str(e)}")
-        log_debug(f"错误详情: {traceback.format_exc()}")
+        log_debug(f"未处理的异常: {str(e)}")
+        log_debug(f"错误堆栈: {traceback.format_exc()}")
         return {
             "statusCode": 500,
             "body": json.dumps({
@@ -492,8 +513,6 @@ def handler(request):
             }),
             "headers": {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
+                "Access-Control-Allow-Origin": "*"
             }
         }
