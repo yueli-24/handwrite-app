@@ -317,15 +317,20 @@ def handler(request):
     request是一个HTTP请求对象，而不是事件字典
     """
     try:
-        log_debug("收到请求")
+        # 记录详细的环境信息，帮助调试
+        log_debug("===== 开始处理请求 =====")
+        log_debug(f"Python版本: {sys.version}")
+        log_debug(f"当前工作目录: {os.getcwd()}")
+        log_debug(f"目录内容: {os.listdir('.')}")
         log_debug(f"请求方法: {request.method}")
+        log_debug(f"请求头: {request.headers if hasattr(request, 'headers') else 'No headers attribute'}")
         
         # 检查请求方法
         if request.method != 'POST':
             log_debug("错误: 仅支持POST请求")
             return {
                 "statusCode": 405,
-                "body": json.dumps({"error": "仅支持POST请求"}),
+                "body": json.dumps({"error": "仅支持POST请求", "trace": "Method not allowed"}),
                 "headers": {"Content-Type": "application/json"}
             }
         
@@ -333,57 +338,117 @@ def handler(request):
         try:
             # 获取请求体
             try:
-                body = request.body
-                if not body:
-                    log_debug("错误: 请求体为空")
+                log_debug("尝试获取请求体...")
+                
+                # 记录请求对象的属性，帮助调试
+                request_attrs = [attr for attr in dir(request) if not attr.startswith('_')]
+                log_debug(f"请求对象属性: {request_attrs}")
+                
+                # 尝试多种方式获取请求体
+                body = None
+                
+                # 方式1: 直接访问body属性
+                if hasattr(request, 'body'):
+                    body = request.body
+                    log_debug(f"通过request.body获取到请求体，类型: {type(body)}")
+                
+                # 方式2: 尝试使用read方法
+                elif hasattr(request, 'read') and callable(request.read):
+                    body = request.read()
+                    log_debug(f"通过request.read()获取到请求体，类型: {type(body)}")
+                
+                # 方式3: 尝试使用json方法
+                elif hasattr(request, 'json') and callable(request.json):
+                    try:
+                        body = request.json()
+                        log_debug(f"通过request.json()获取到请求体，类型: {type(body)}")
+                    except Exception as json_err:
+                        log_debug(f"request.json()方法失败: {str(json_err)}")
+                
+                # 检查是否获取到请求体
+                if body is None:
+                    log_debug("错误: 无法获取请求体")
                     return {
                         "statusCode": 400,
-                        "body": json.dumps({"error": "请求体为空"}),
+                        "body": json.dumps({
+                            "error": "无法获取请求体", 
+                            "trace": "Request body is None, tried body attribute, read() and json() methods"
+                        }),
                         "headers": {"Content-Type": "application/json"}
                     }
                 
                 # 尝试解析JSON
                 if isinstance(body, dict):
                     data = body
+                    log_debug("请求体已经是字典类型，无需解析")
                 elif isinstance(body, bytes):
-                    data = json.loads(body.decode('utf-8'))
+                    body_str = body.decode('utf-8')
+                    log_debug(f"请求体(bytes->str): {body_str[:200]}...")
+                    data = json.loads(body_str)
                 elif isinstance(body, str):
+                    log_debug(f"请求体(str): {body[:200]}...")
                     data = json.loads(body)
                 else:
                     log_debug(f"错误: 无法处理的请求体类型: {type(body)}")
                     return {
                         "statusCode": 400,
-                        "body": json.dumps({"error": f"无法处理的请求体类型: {type(body)}"}),
+                        "body": json.dumps({
+                            "error": f"无法处理的请求体类型: {type(body)}", 
+                            "trace": f"Unsupported body type: {type(body)}"
+                        }),
                         "headers": {"Content-Type": "application/json"}
                     }
             except Exception as e:
                 log_debug(f"获取或解析请求体时出错: {str(e)}")
+                log_debug(f"错误详情: {traceback.format_exc()}")
                 return {
                     "statusCode": 400,
-                    "body": json.dumps({"error": f"获取或解析请求体时出错: {str(e)}"}),
+                    "body": json.dumps({
+                        "error": f"获取或解析请求体时出错: {str(e)}", 
+                        "trace": traceback.format_exc()
+                    }),
                     "headers": {"Content-Type": "application/json"}
                 }
             
             log_debug(f"请求数据: {data}")
             
-            text = data.get('text', '')
-            fontSize = data.get('fontSize', 8)
-            marginTop = data.get('marginTop', 35)
-            marginBottom = data.get('marginBottom', 25)
-            marginLeft = data.get('marginLeft', 30)
-            marginRight = data.get('marginRight', 30)
-            paperSize = data.get('paperSize', 'A4')
+            # 提取参数
+            try:
+                text = data.get('text', '')
+                fontSize = data.get('fontSize', 8)
+                marginTop = data.get('marginTop', 35)
+                marginBottom = data.get('marginBottom', 25)
+                marginLeft = data.get('marginLeft', 30)
+                marginRight = data.get('marginRight', 30)
+                paperSize = data.get('paperSize', 'A4')
+                
+                log_debug(f"提取的参数: text长度={len(text)}, fontSize={fontSize}, marginTop={marginTop}, marginBottom={marginBottom}, marginLeft={marginLeft}, marginRight={marginRight}, paperSize={paperSize}")
+            except Exception as param_err:
+                log_debug(f"提取参数时出错: {str(param_err)}")
+                log_debug(f"错误详情: {traceback.format_exc()}")
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps({
+                        "error": f"提取参数时出错: {str(param_err)}", 
+                        "trace": traceback.format_exc()
+                    }),
+                    "headers": {"Content-Type": "application/json"}
+                }
             
             if not text:
                 log_debug("错误: 文本内容为空")
                 return {
                     "statusCode": 400,
-                    "body": json.dumps({"error": "文本内容不能为空"}),
+                    "body": json.dumps({
+                        "error": "文本内容不能为空", 
+                        "trace": "Empty text parameter"
+                    }),
                     "headers": {"Content-Type": "application/json"}
                 }
             
             # 生成预览和G代码
             try:
+                log_debug("开始生成预览和G代码...")
                 preview_base64, gcode_content = generate_preview(
                     text=text,
                     font_size=fontSize,
@@ -396,6 +461,7 @@ def handler(request):
                 
                 # 创建会话ID
                 session_id = str(uuid.uuid4())
+                log_debug(f"生成会话ID: {session_id}")
                 
                 # 构建响应
                 response = {
@@ -406,6 +472,8 @@ def handler(request):
                 }
                 
                 log_debug(f"生成成功，共 {len(preview_base64)} 页")
+                log_debug("===== 请求处理完成 =====")
+                
                 return {
                     "statusCode": 200,
                     "body": json.dumps(response),
@@ -419,16 +487,20 @@ def handler(request):
                     "statusCode": 500,
                     "body": json.dumps({
                         "error": f"生成预览时出错: {str(e)}",
-                        "traceback": traceback.format_exc()
+                        "trace": traceback.format_exc()
                     }),
                     "headers": {"Content-Type": "application/json"}
                 }
             
         except json.JSONDecodeError as e:
             log_debug(f"JSON解析错误: {str(e)}")
+            log_debug(f"错误详情: {traceback.format_exc()}")
             return {
                 "statusCode": 400,
-                "body": json.dumps({"error": f"无效的JSON格式: {str(e)}"}),
+                "body": json.dumps({
+                    "error": f"无效的JSON格式: {str(e)}", 
+                    "trace": traceback.format_exc()
+                }),
                 "headers": {"Content-Type": "application/json"}
             }
             
@@ -439,7 +511,7 @@ def handler(request):
             "statusCode": 500,
             "body": json.dumps({
                 "error": f"处理请求时出错: {str(e)}",
-                "traceback": traceback.format_exc()
+                "trace": traceback.format_exc()
             }),
             "headers": {"Content-Type": "application/json"}
         }

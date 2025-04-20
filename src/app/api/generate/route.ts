@@ -57,16 +57,29 @@ export async function POST(request: Request) {
       if (!pythonResponse.ok) {
         const errorText = await pythonResponse.text();
         let errorMessage = 'Python处理失败';
+        let errorTrace = '';
         
         try {
           const errorData = JSON.parse(errorText);
           errorMessage = errorData.error || errorMessage;
+          errorTrace = errorData.trace || '';
+          
+          console.error('Python API返回错误:', errorMessage);
+          console.error('Python API错误详情:', errorTrace);
+          
+          // 返回完整的错误信息，包括trace
+          return NextResponse.json({ 
+            error: errorMessage, 
+            trace: errorTrace 
+          }, { status: 500 });
         } catch (e) {
           errorMessage = `Python处理失败: ${errorText.substring(0, 100)}`;
+          console.error('Python API返回错误(无法解析):', errorMessage);
+          return NextResponse.json({ 
+            error: errorMessage,
+            trace: `无法解析错误响应: ${e instanceof Error ? e.message : String(e)}`
+          }, { status: 500 });
         }
-        
-        console.error('Python API返回错误:', errorMessage);
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
       }
       
       const responseText = await pythonResponse.text();

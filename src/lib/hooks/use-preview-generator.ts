@@ -76,7 +76,12 @@ export const usePreviewGenerator = () => {
       }
 
       if (!response.ok) {
-        throw new Error(data.error || '生成预览失败');
+        // 显示详细的错误信息，包括trace
+        const errorMessage = data.error || '生成预览失败';
+        const errorTrace = data.trace || '无详细错误信息';
+        console.error('API错误详情:', errorMessage);
+        console.error('错误跟踪:', errorTrace);
+        throw new Error(`${errorMessage}\n详细信息: ${errorTrace}`);
       }
 
       if (!data.previewUrls || !data.gcodeUrls) {
@@ -88,7 +93,10 @@ export const usePreviewGenerator = () => {
       console.log('预览生成成功:', data);
     } catch (err) {
       console.error('预览生成错误:', err);
-      setError(err instanceof Error ? err.message : '生成预览时发生未知错误');
+      // 显示完整的错误信息，包括堆栈跟踪
+      const errorMessage = err instanceof Error ? err.message : '生成预览时发生未知错误';
+      const errorStack = err instanceof Error && err.stack ? `\n堆栈: ${err.stack}` : '';
+      setError(`${errorMessage}${errorStack}`);
     } finally {
       setIsGenerating(false);
     }
