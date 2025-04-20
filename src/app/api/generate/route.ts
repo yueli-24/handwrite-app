@@ -29,10 +29,14 @@ export async function POST(request: Request) {
     console.log('调用Python API生成预览...');
     
     try {
-      // 调用Python API端点而不是直接执行Python脚本
-      const pythonApiUrl = process.env.NODE_ENV === 'production' 
-        ? '/api/python/generate' 
-        : 'http://localhost:3000/api/python/generate';
+      // 从请求URL获取主机名，用于构建绝对URL
+      const requestUrl = new URL(request.url);
+      const host = requestUrl.origin;
+      
+      // 构建Python API的绝对URL
+      const pythonApiUrl = `${host}/api/python/generate`;
+      
+      console.log('Python API URL:', pythonApiUrl);
       
       const pythonResponse = await fetch(pythonApiUrl, {
         method: 'POST',
@@ -51,12 +55,30 @@ export async function POST(request: Request) {
       });
       
       if (!pythonResponse.ok) {
-        const errorData = await pythonResponse.json();
-        console.error('Python API返回错误:', errorData);
-        return NextResponse.json({ error: errorData.error || 'Python处理失败' }, { status: 500 });
+        const errorText = await pythonResponse.text();
+        let errorMessage = 'Python处理失败';
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = `Python处理失败: ${errorText.substring(0, 100)}`;
+        }
+        
+        console.error('Python API返回错误:', errorMessage);
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
       }
       
-      const pythonData = await pythonResponse.json();
+      const responseText = await pythonResponse.text();
+      let pythonData;
+      
+      try {
+        pythonData = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error('Python API响应解析错误:', jsonError, responseText.substring(0, 100));
+        return NextResponse.json({ error: '无法解析Python API响应' }, { status: 500 });
+      }
+      
       console.log('Python API响应成功');
       
       // 创建会话目录

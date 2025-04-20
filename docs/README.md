@@ -201,7 +201,9 @@ handwrite-app/
 ## 联系方式
 
 如有任何问题或建议，请通过以下方式联系：
-- 电子邮件：[yue.work24@gmail.com]
+
+- 项目仓库：[GitHub仓库链接]
+- 电子邮件：yue.work24@gmail.com
 
 ---
 
