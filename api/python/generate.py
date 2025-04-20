@@ -12,7 +12,6 @@ import numpy as np
 import random
 import math
 import functools
-from http.server import BaseHTTPRequestHandler
 from typing import Any, Dict, List, Tuple, Union
 
 # 调试信息
@@ -275,112 +274,6 @@ class HandwritingGenerator:
                         prev_x, prev_y = x_px, y_px
         
         return image
-
-class RequestHandler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        """处理POST请求"""
-        try:
-            # 获取请求体长度
-            content_length = int(self.headers.get('Content-Length', 0))
-            if content_length == 0:
-                self.send_error(400, "请求体为空")
-                return
-            
-            # 读取请求体
-            body = self.rfile.read(content_length)
-            
-            # 解析JSON
-            try:
-                data = json.loads(body.decode('utf-8'))
-            except json.JSONDecodeError as e:
-                self.send_error(400, f"无效的JSON格式: {str(e)}")
-                return
-            
-            # 验证必要参数
-            required_params = ['text']
-            missing_params = [param for param in required_params if param not in data]
-            if missing_params:
-                self.send_error(400, f"缺少必要参数: {', '.join(missing_params)}")
-                return
-            
-            # 获取参数
-            text = data.get('text', '')
-            font_size = int(data.get('fontSize', 8))
-            margin_top = int(data.get('marginTop', 35))
-            margin_bottom = int(data.get('marginBottom', 25))
-            margin_left = int(data.get('marginLeft', 30))
-            margin_right = int(data.get('marginRight', 30))
-            paper_size = data.get('paperSize', 'A4')
-            
-            # 验证参数
-            if not text.strip():
-                self.send_error(400, "文本内容不能为空")
-                return
-            
-            # 尝试查找字体文件
-            font_path = None
-            possible_font_paths = [
-                os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
-                os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
-                os.path.join(os.path.dirname(os.getcwd()), 'public', 'fonts', 'しょかきさらり行体.ttf'),
-                os.path.join('/tmp', 'fonts', 'しょかきさらり行体.ttf'),
-                # Vercel环境中的可能路径
-                '/var/task/public/fonts/しょかきさらり行体.ttf',
-                '/var/task/fonts/しょかきさらり行体.ttf'
-            ]
-            
-            for path in possible_font_paths:
-                log_debug(f"检查字体路径: {path}")
-                if os.path.exists(path):
-                    font_path = path
-                    log_debug(f"找到字体文件: {path}")
-                    break
-            
-            if not font_path:
-                log_debug("未找到字体文件，将使用默认字体")
-                font_path = ""
-            
-            # 生成预览
-            try:
-                log_debug("开始生成预览")
-                generator = HandwritingGenerator(
-                    font_path=font_path,
-                    font_size=font_size,
-                    margin_top=margin_top,
-                    margin_bottom=margin_bottom,
-                    margin_left=margin_left,
-                    margin_right=margin_right,
-                    paper_size=paper_size
-                )
-                
-                preview_base64, gcode_content = generator.process_text(text)
-                
-                # 构建响应
-                response = {
-                    "success": True,
-                    "sessionId": str(uuid.uuid4()),
-                    "previewBase64": preview_base64,
-                    "gcodeContent": gcode_content
-                }
-                
-                log_debug(f"预览生成成功，页数: {len(preview_base64)}")
-                
-                # 发送响应
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode('utf-8'))
-                
-            except Exception as e:
-                log_debug(f"生成预览时出错: {str(e)}")
-                log_debug(f"错误堆栈: {traceback.format_exc()}")
-                self.send_error(500, f"生成预览失败: {str(e)}")
-                
-        except Exception as e:
-            log_debug(f"处理请求时出错: {str(e)}")
-            log_debug(f"错误堆栈: {traceback.format_exc()}")
-            self.send_error(500, f"处理请求失败: {str(e)}")
 
 def handler(request):
     """Vercel Python Serverless Function处理器"""
