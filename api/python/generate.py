@@ -22,35 +22,6 @@ def log_debug(message):
         print(f"DEBUG: {message}")
         sys.stdout.flush()
 
-def safe_handler(handler_func):
-    """装饰器：确保handler函数始终返回有效的JSON响应，即使发生未捕获的异常"""
-    @functools.wraps(handler_func)
-    def wrapper(request):
-        try:
-            log_debug(f"===== 开始处理请求 =====")
-            log_debug(f"Python版本: {sys.version}")
-            log_debug(f"当前工作目录: {os.getcwd()}")
-            
-            # 调用原始handler函数
-            return handler_func(request)
-        except Exception as e:
-            # 捕获所有未处理的异常
-            error_message = f"未捕获的异常: {str(e)}"
-            error_trace = traceback.format_exc()
-            log_debug(error_message)
-            log_debug(f"错误详情: {error_trace}")
-            
-            # 确保返回有效的JSON响应
-            return {
-                "statusCode": 500,
-                "body": json.dumps({
-                    "error": error_message,
-                    "trace": error_trace
-                }),
-                "headers": {"Content-Type": "application/json"}
-            }
-    return wrapper
-
 # 记录环境信息
 log_debug(f"当前工作目录: {os.getcwd()}")
 log_debug(f"目录内容: {os.listdir('.')}")
@@ -342,30 +313,39 @@ def generate_preview(text, font_size=8, margin_top=35, margin_bottom=25,
     
     return generator.process_text(text)
 
-@safe_handler
 def handler(request):
     """Vercel Python Serverless Function处理器
     
     按照Vercel要求的格式：def handler(request)
     request是一个HTTP请求对象，而不是事件字典
-    使用safe_handler装饰器确保始终返回有效的JSON响应
     """
+    # 直接在函数内部处理所有异常，避免依赖装饰器
     try:
         # 记录详细的环境信息，帮助调试
         log_debug("===== 开始处理请求 =====")
         log_debug(f"Python版本: {sys.version}")
         log_debug(f"当前工作目录: {os.getcwd()}")
         log_debug(f"目录内容: {os.listdir('.')}")
-        log_debug(f"请求方法: {request.method}")
-        log_debug(f"请求头: {request.headers if hasattr(request, 'headers') else 'No headers attribute'}")
+        
+        # 安全地获取请求属性
+        request_method = getattr(request, 'method', 'UNKNOWN')
+        log_debug(f"请求方法: {request_method}")
+        
+        request_headers = getattr(request, 'headers', None)
+        log_debug(f"请求头: {request_headers if request_headers else 'No headers attribute'}")
         
         # 检查请求方法
-        if request.method != 'POST':
+        if request_method != 'POST':
             log_debug("错误: 仅支持POST请求")
             return {
                 "statusCode": 405,
                 "body": json.dumps({"error": "仅支持POST请求", "trace": "Method not allowed"}),
-                "headers": {"Content-Type": "application/json"}
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type"
+                }
             }
         
         # 解析请求体
@@ -408,7 +388,12 @@ def handler(request):
                             "error": "无法获取请求体", 
                             "trace": "Request body is None, tried body attribute, read() and json() methods"
                         }),
-                        "headers": {"Content-Type": "application/json"}
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Allow-Methods": "POST, OPTIONS",
+                            "Access-Control-Allow-Headers": "Content-Type"
+                        }
                     }
                 
                 # 尝试解析JSON
@@ -430,7 +415,12 @@ def handler(request):
                             "error": f"无法处理的请求体类型: {type(body)}", 
                             "trace": f"Unsupported body type: {type(body)}"
                         }),
-                        "headers": {"Content-Type": "application/json"}
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Allow-Methods": "POST, OPTIONS",
+                            "Access-Control-Allow-Headers": "Content-Type"
+                        }
                     }
             except Exception as e:
                 log_debug(f"获取或解析请求体时出错: {str(e)}")
@@ -441,7 +431,12 @@ def handler(request):
                         "error": f"获取或解析请求体时出错: {str(e)}", 
                         "trace": traceback.format_exc()
                     }),
-                    "headers": {"Content-Type": "application/json"}
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type"
+                    }
                 }
             
             log_debug(f"请求数据: {data}")
@@ -456,28 +451,38 @@ def handler(request):
                 marginRight = data.get('marginRight', 30)
                 paperSize = data.get('paperSize', 'A4')
                 
-                log_debug(f"提取的参数: text长度={len(text)}, fontSize={fontSize}, marginTop={marginTop}, marginBottom={marginBottom}, marginLeft={marginLeft}, marginRight={marginRight}, paperSize={paperSize}")
-            except Exception as param_err:
-                log_debug(f"提取参数时出错: {str(param_err)}")
+                log_debug(f"参数: text={text[:50]}..., fontSize={fontSize}, marginTop={marginTop}, marginBottom={marginBottom}, marginLeft={marginLeft}, marginRight={marginRight}, paperSize={paperSize}")
+                
+                if not text:
+                    log_debug("错误: 文本内容为空")
+                    return {
+                        "statusCode": 400,
+                        "body": json.dumps({
+                            "error": "文本内容不能为空", 
+                            "trace": "Text content is required"
+                        }),
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Allow-Methods": "POST, OPTIONS",
+                            "Access-Control-Allow-Headers": "Content-Type"
+                        }
+                    }
+            except Exception as e:
+                log_debug(f"提取参数时出错: {str(e)}")
                 log_debug(f"错误详情: {traceback.format_exc()}")
                 return {
                     "statusCode": 400,
                     "body": json.dumps({
-                        "error": f"提取参数时出错: {str(param_err)}", 
+                        "error": f"提取参数时出错: {str(e)}", 
                         "trace": traceback.format_exc()
                     }),
-                    "headers": {"Content-Type": "application/json"}
-                }
-            
-            if not text:
-                log_debug("错误: 文本内容为空")
-                return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        "error": "文本内容不能为空", 
-                        "trace": "Empty text parameter"
-                    }),
-                    "headers": {"Content-Type": "application/json"}
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type"
+                    }
                 }
             
             # 生成预览和G代码
@@ -492,60 +497,81 @@ def handler(request):
                     margin_right=marginRight,
                     paper_size=paperSize
                 )
+                log_debug(f"生成完成，预览页数: {len(preview_base64)}")
                 
                 # 创建会话ID
                 session_id = str(uuid.uuid4())
-                log_debug(f"生成会话ID: {session_id}")
+                log_debug(f"会话ID: {session_id}")
                 
-                # 构建响应
-                response = {
-                    'success': True,
-                    'previewBase64': preview_base64,
-                    'gcodeContent': gcode_content,
-                    'sessionId': session_id
+                # 返回成功响应
+                response_data = {
+                    "success": True,
+                    "sessionId": session_id,
+                    "previewBase64": preview_base64,
+                    "gcodeContent": gcode_content
                 }
                 
-                log_debug(f"生成成功，共 {len(preview_base64)} 页")
-                log_debug("===== 请求处理完成 =====")
-                
+                log_debug("返回成功响应")
                 return {
                     "statusCode": 200,
-                    "body": json.dumps(response),
-                    "headers": {"Content-Type": "application/json"}
+                    "body": json.dumps(response_data),
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type"
+                    }
                 }
-                
             except Exception as e:
-                log_debug(f"生成预览时出错: {str(e)}")
+                log_debug(f"生成预览和G代码时出错: {str(e)}")
                 log_debug(f"错误详情: {traceback.format_exc()}")
                 return {
                     "statusCode": 500,
                     "body": json.dumps({
-                        "error": f"生成预览时出错: {str(e)}",
+                        "error": f"生成预览和G代码时出错: {str(e)}", 
                         "trace": traceback.format_exc()
                     }),
-                    "headers": {"Content-Type": "application/json"}
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type"
+                    }
                 }
-            
-        except json.JSONDecodeError as e:
-            log_debug(f"JSON解析错误: {str(e)}")
+        except Exception as e:
+            log_debug(f"处理请求体时出错: {str(e)}")
             log_debug(f"错误详情: {traceback.format_exc()}")
             return {
-                "statusCode": 400,
+                "statusCode": 500,
                 "body": json.dumps({
-                    "error": f"无效的JSON格式: {str(e)}", 
+                    "error": f"处理请求体时出错: {str(e)}", 
                     "trace": traceback.format_exc()
                 }),
-                "headers": {"Content-Type": "application/json"}
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type"
+                }
             }
-            
     except Exception as e:
-        log_debug(f"处理请求时出错: {str(e)}")
-        log_debug(f"错误详情: {traceback.format_exc()}")
+        # 捕获所有未处理的异常，包括Vercel基础设施级别的错误
+        error_message = f"未捕获的异常: {str(e)}"
+        error_trace = traceback.format_exc()
+        log_debug(error_message)
+        log_debug(f"错误详情: {error_trace}")
+        
+        # 确保返回有效的JSON响应，防止Vercel返回HTML错误页面
         return {
             "statusCode": 500,
             "body": json.dumps({
-                "error": f"处理请求时出错: {str(e)}",
-                "trace": traceback.format_exc()
+                "error": error_message,
+                "trace": error_trace
             }),
-            "headers": {"Content-Type": "application/json"}
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
         }
