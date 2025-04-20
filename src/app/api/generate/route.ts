@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -27,139 +26,102 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '文本内容不能为空' }, { status: 400 });
     }
     
-    // 创建唯一的会话ID
-    const sessionId = Date.now().toString();
-    const sessionDir = path.join(tempDir, sessionId);
+    console.log('调用Python API生成预览...');
     
-    // 添加错误处理，确保目录创建成功
     try {
-      fs.mkdirSync(sessionDir, { recursive: true });
-    } catch (dirError) {
-      console.error('创建会话目录失败:', dirError);
-      return NextResponse.json({ error: '创建临时目录失败' }, { status: 500 });
-    }
-    
-    // 创建输入文本文件
-    const inputTextPath = path.join(sessionDir, 'input_text.txt');
-    try {
-      fs.writeFileSync(inputTextPath, text);
-    } catch (fileError) {
-      console.error('写入输入文件失败:', fileError);
-      return NextResponse.json({ error: '创建输入文件失败' }, { status: 500 });
-    }
-    
-    // 获取Python脚本路径
-    const pythonScriptPath = path.join(process.cwd(), 'src', 'lib', 'python', 'handwrite.py');
-    
-    // 检查Python脚本是否存在
-    if (!fs.existsSync(pythonScriptPath)) {
-      console.error('Python脚本不存在:', pythonScriptPath);
-      return NextResponse.json({ error: 'Python脚本文件不存在' }, { status: 500 });
-    }
-    
-    // 获取字体路径
-    const fontPath = path.join(process.cwd(), 'public', 'fonts', 'しょかきさらり行体.ttf');
-    
-    // 检查字体文件是否存在
-    if (!fs.existsSync(fontPath)) {
-      console.error('字体文件不存在:', fontPath);
-      return NextResponse.json({ error: '字体文件不存在' }, { status: 500 });
-    }
-    
-    // 准备命令行参数
-    const args = [
-      pythonScriptPath,
-      '--input', inputTextPath,
-      '--output-dir', sessionDir,
-      '--font-size', fontSize.toString(),
-      '--margin-top', marginTop.toString(),
-      '--margin-bottom', marginBottom.toString(),
-      '--margin-left', marginLeft.toString(),
-      '--margin-right', marginRight.toString(),
-      '--paper-size', paperSize,
-      '--font', fontPath,
-      '--preview'
-    ];
-    
-    console.log('执行Python命令:', 'python3', args.join(' '));
-    
-    // 执行Python脚本
-    const result = await new Promise((resolve, reject) => {
-      const process = spawn('python3', args);
+      // 调用Python API端点而不是直接执行Python脚本
+      const pythonApiUrl = process.env.NODE_ENV === 'production' 
+        ? '/api/python/generate' 
+        : 'http://localhost:3000/api/python/generate';
       
-      let stdout = '';
-      let stderr = '';
-      
-      process.stdout.on('data', (data) => {
-        stdout += data.toString();
-        console.log('Python stdout:', data.toString());
+      const pythonResponse = await fetch(pythonApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text,
+          fontSize,
+          marginTop,
+          marginBottom,
+          marginLeft,
+          marginRight,
+          paperSize
+        }),
       });
       
-      process.stderr.on('data', (data) => {
-        stderr += data.toString();
-        console.error('Python stderr:', data.toString());
-      });
+      if (!pythonResponse.ok) {
+        const errorData = await pythonResponse.json();
+        console.error('Python API返回错误:', errorData);
+        return NextResponse.json({ error: errorData.error || 'Python处理失败' }, { status: 500 });
+      }
       
-      process.on('error', (error) => {
-        console.error('启动Python进程失败:', error);
-        reject(new Error(`启动Python进程失败: ${error.message}`));
-      });
+      const pythonData = await pythonResponse.json();
+      console.log('Python API响应成功');
       
-      process.on('close', (code) => {
-        console.log(`Python进程退出，退出码: ${code}`);
-        if (code !== 0) {
-          reject(new Error(`Python脚本执行失败 (退出码 ${code}): ${stderr}`));
-          return;
-        }
+      // 创建会话目录
+      const sessionId = pythonData.sessionId;
+      const sessionDir = path.join(tempDir, sessionId);
+      
+      try {
+        fs.mkdirSync(sessionDir, { recursive: true });
+      } catch (dirError) {
+        console.error('创建会话目录失败:', dirError);
+        return NextResponse.json({ error: '创建临时目录失败' }, { status: 500 });
+      }
+      
+      // 将base64图像保存为文件
+      const previewFiles = [];
+      for (let i = 0; i < pythonData.previewBase64.length; i++) {
+        const previewFileName = `page_${String(i + 1).padStart(3, '0')}_preview.png`;
+        const previewPath = path.join(sessionDir, previewFileName);
         
-        resolve(stdout);
-      });
-    });
-    
-    // 检查会话目录是否存在
-    if (!fs.existsSync(sessionDir)) {
-      console.error('会话目录不存在:', sessionDir);
-      return NextResponse.json({ error: '生成文件失败' }, { status: 500 });
+        try {
+          const imgBuffer = Buffer.from(pythonData.previewBase64[i], 'base64');
+          fs.writeFileSync(previewPath, imgBuffer);
+          previewFiles.push(previewFileName);
+        } catch (fileError) {
+          console.error('保存预览图像失败:', fileError);
+          return NextResponse.json({ error: '保存预览图像失败' }, { status: 500 });
+        }
+      }
+      
+      // 将G代码内容保存为文件
+      const gcodeFiles = [];
+      for (let i = 0; i < pythonData.gcodeContent.length; i++) {
+        const gcodeFileName = `page_${String(i + 1).padStart(3, '0')}.gcode`;
+        const gcodePath = path.join(sessionDir, gcodeFileName);
+        
+        try {
+          fs.writeFileSync(gcodePath, pythonData.gcodeContent[i]);
+          gcodeFiles.push(gcodeFileName);
+        } catch (fileError) {
+          console.error('保存G代码文件失败:', fileError);
+          return NextResponse.json({ error: '保存G代码文件失败' }, { status: 500 });
+        }
+      }
+      
+      // 创建URL
+      const previewUrls = previewFiles.map(file => `/api/generate?file=${sessionId}/${file}&type=preview`);
+      const gcodeUrls = gcodeFiles.map(file => `/api/download/gcode?file=${sessionId}/${file}`);
+      
+      // 返回成功响应
+      const responseData = {
+        success: true,
+        previewUrls,
+        gcodeUrls,
+        sessionId
+      };
+      
+      console.log('API响应数据:', responseData);
+      return NextResponse.json(responseData);
+    } catch (pythonError) {
+      console.error('调用Python API失败:', pythonError);
+      return NextResponse.json(
+        { error: pythonError instanceof Error ? pythonError.message : '调用Python API失败' },
+        { status: 500 }
+      );
     }
-    
-    // 读取生成的文件
-    let files;
-    try {
-      files = fs.readdirSync(sessionDir);
-      console.log('生成的文件:', files);
-    } catch (readError) {
-      console.error('读取生成的文件失败:', readError);
-      return NextResponse.json({ error: '读取生成的文件失败' }, { status: 500 });
-    }
-    
-    const previewFiles = files.filter(file => file.includes('_preview.png'));
-    const gcodeFiles = files.filter(file => file.endsWith('.gcode') && !file.includes('_preview'));
-    
-    // 检查是否有生成的文件
-    if (previewFiles.length === 0 || gcodeFiles.length === 0) {
-      console.error('没有生成预览文件或G代码文件');
-      return NextResponse.json({ error: '生成文件失败，没有找到预览图像或G代码文件' }, { status: 500 });
-    }
-    
-    // 排序文件
-    previewFiles.sort();
-    gcodeFiles.sort();
-    
-    // 创建URL
-    const previewUrls = previewFiles.map(file => `/api/generate?file=${sessionId}/${file}&type=preview`);
-    const gcodeUrls = gcodeFiles.map(file => `/api/download/gcode?file=${sessionId}/${file}`);
-    
-    // 返回成功响应
-    const responseData = {
-      success: true,
-      previewUrls,
-      gcodeUrls,
-      sessionId
-    };
-    
-    console.log('API响应数据:', responseData);
-    return NextResponse.json(responseData);
-    
   } catch (error) {
     console.error('生成手写效果时出错:', error);
     return NextResponse.json(

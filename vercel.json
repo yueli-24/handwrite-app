@@ -1,0 +1,14 @@
+# Vercel Python 运行时配置
+{
+  "builds": [
+    { "src": "api/python/*.py", "use": "@vercel/python" },
+    { "src": "package.json", "use": "@vercel/next" }
+  ],
+  "routes": [
+    { "src": "/api/python/(.*)", "dest": "/api/python/$1" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ],
+  "env": {
+    "PYTHON_ENABLED": "true"
+  }
+}
