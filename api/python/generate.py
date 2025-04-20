@@ -327,6 +327,7 @@ def handler(request):
         
         # 检查请求方法
         if request_method != 'POST':
+            log_debug("错误: 仅支持POST请求")
             return {
                 "statusCode": 405,
                 "body": json.dumps({
@@ -335,9 +336,7 @@ def handler(request):
                 }),
                 "headers": {
                     "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "POST",
-                    "Access-Control-Allow-Headers": "Content-Type"
+                    "Access-Control-Allow-Origin": "*"
                 }
             }
         
@@ -347,10 +346,13 @@ def handler(request):
             body = None
             if hasattr(request, 'body'):
                 body = request.body
+                log_debug(f"通过request.body获取到请求体，类型: {type(body)}")
             elif hasattr(request, 'read') and callable(request.read):
                 body = request.read()
+                log_debug(f"通过request.read()获取到请求体，类型: {type(body)}")
             elif hasattr(request, 'json') and callable(request.json):
                 body = request.json()
+                log_debug(f"通过request.json()获取到请求体，类型: {type(body)}")
             
             if not body:
                 log_debug("无法获取请求体")
@@ -370,8 +372,11 @@ def handler(request):
             try:
                 if isinstance(body, str):
                     data = json.loads(body)
+                elif isinstance(body, bytes):
+                    data = json.loads(body.decode('utf-8'))
                 else:
                     data = body
+                log_debug(f"解析后的数据: {data}")
             except json.JSONDecodeError as e:
                 log_debug(f"JSON解析错误: {str(e)}")
                 return {
@@ -414,6 +419,7 @@ def handler(request):
             
             # 验证参数
             if not text.strip():
+                log_debug("文本内容为空")
                 return {
                     "statusCode": 400,
                     "body": json.dumps({
@@ -429,20 +435,29 @@ def handler(request):
             # 尝试查找字体文件
             font_path = None
             possible_font_paths = [
-                os.path.join(os.getcwd(), 'fonts', 'simsun.ttf'),
-                os.path.join(os.getcwd(), 'api', 'python', 'fonts', 'simsun.ttf'),
-                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-                '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'
+                os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
+                os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
+                os.path.join(os.path.dirname(os.getcwd()), 'public', 'fonts', 'しょかきさらり行体.ttf'),
+                os.path.join('/tmp', 'fonts', 'しょかきさらり行体.ttf'),
+                # Vercel环境中的可能路径
+                '/var/task/public/fonts/しょかきさらり行体.ttf',
+                '/var/task/fonts/しょかきさらり行体.ttf'
             ]
             
             for path in possible_font_paths:
+                log_debug(f"检查字体路径: {path}")
                 if os.path.exists(path):
                     font_path = path
-                    log_debug(f"找到字体文件: {font_path}")
+                    log_debug(f"找到字体文件: {path}")
                     break
+            
+            if not font_path:
+                log_debug("未找到字体文件，将使用默认字体")
+                font_path = ""
             
             # 生成预览
             try:
+                log_debug("开始生成预览")
                 generator = HandwritingGenerator(
                     font_path=font_path,
                     font_size=font_size,
@@ -463,6 +478,7 @@ def handler(request):
                     "gcodeContent": gcode_content
                 }
                 
+                log_debug(f"预览生成成功，页数: {len(preview_base64)}")
                 return {
                     "statusCode": 200,
                     "body": json.dumps(response),
