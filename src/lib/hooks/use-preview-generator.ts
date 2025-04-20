@@ -108,14 +108,14 @@ export const usePreviewGenerator = () => {
         // 检查是否有预览数据
         if (data.previewBase64) {
           // 处理单页或多页预览
-          const previewArray = Array.isArray(data.previewBase64) 
+          const previewArray: string[] = Array.isArray(data.previewBase64) 
             ? data.previewBase64 
             : [data.previewBase64];
           
-          setPreviewUrls(previewArray.map(base64 => `data:image/png;base64,${base64}`));
+          setPreviewUrls(previewArray.map((base64: string) => `data:image/png;base64,${base64}`));
           
           // 处理G代码
-          const gcodeArray = Array.isArray(data.gcodeContent) 
+          const gcodeArray: string[] = Array.isArray(data.gcodeContent) 
             ? data.gcodeContent 
             : [data.gcodeContent];
           
