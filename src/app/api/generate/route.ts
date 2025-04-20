@@ -88,8 +88,12 @@ export async function POST(request: Request) {
       try {
         pythonData = JSON.parse(responseText);
       } catch (jsonError) {
-        console.error('Python API响应解析错误:', jsonError, responseText.substring(0, 100));
-        return NextResponse.json({ error: '无法解析Python API响应' }, { status: 500 });
+        console.error('Python API响应解析错误:', jsonError);
+        console.error('无效的JSON响应:', responseText.substring(0, 500));
+        return NextResponse.json({ 
+          error: '无法解析Python API响应', 
+          trace: `JSON解析错误: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}\n响应内容: ${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}`
+        }, { status: 500 });
       }
       
       console.log('Python API响应成功');

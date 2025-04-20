@@ -1,4 +1,3 @@
-from http.server import BaseHTTPRequestHandler
 import json
 import os
 import sys
@@ -9,6 +8,10 @@ import shutil
 import uuid
 import traceback
 from PIL import Image, ImageDraw, ImageFont
+import numpy as np
+import random
+import math
+import functools
 
 # 调试信息
 DEBUG = True
@@ -18,6 +21,35 @@ def log_debug(message):
     if DEBUG:
         print(f"DEBUG: {message}")
         sys.stdout.flush()
+
+def safe_handler(handler_func):
+    """装饰器：确保handler函数始终返回有效的JSON响应，即使发生未捕获的异常"""
+    @functools.wraps(handler_func)
+    def wrapper(request):
+        try:
+            log_debug(f"===== 开始处理请求 =====")
+            log_debug(f"Python版本: {sys.version}")
+            log_debug(f"当前工作目录: {os.getcwd()}")
+            
+            # 调用原始handler函数
+            return handler_func(request)
+        except Exception as e:
+            # 捕获所有未处理的异常
+            error_message = f"未捕获的异常: {str(e)}"
+            error_trace = traceback.format_exc()
+            log_debug(error_message)
+            log_debug(f"错误详情: {error_trace}")
+            
+            # 确保返回有效的JSON响应
+            return {
+                "statusCode": 500,
+                "body": json.dumps({
+                    "error": error_message,
+                    "trace": error_trace
+                }),
+                "headers": {"Content-Type": "application/json"}
+            }
+    return wrapper
 
 # 记录环境信息
 log_debug(f"当前工作目录: {os.getcwd()}")
@@ -310,11 +342,13 @@ def generate_preview(text, font_size=8, margin_top=35, margin_bottom=25,
     
     return generator.process_text(text)
 
+@safe_handler
 def handler(request):
     """Vercel Python Serverless Function处理器
     
     按照Vercel要求的格式：def handler(request)
     request是一个HTTP请求对象，而不是事件字典
+    使用safe_handler装饰器确保始终返回有效的JSON响应
     """
     try:
         # 记录详细的环境信息，帮助调试
