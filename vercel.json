@@ -1,4 +1,3 @@
-# Vercel Python 运行时配置
 {
   "builds": [
     { "src": "api/python/*.py", "use": "@vercel/python" },
