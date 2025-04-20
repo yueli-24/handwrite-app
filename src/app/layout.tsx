@@ -1,15 +1,13 @@
-import './globals.css';
-import type { Metadata } from 'next';
 import localFont from 'next/font/local';
+import './globals.css';
 
-// 导入本地字体
+// 导入本地手写字体
 const handwritingFont = localFont({
   src: '../../public/fonts/しょかきさらり行体.ttf',
   variable: '--font-handwriting',
-  display: 'swap',
 });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: '手写文字生成器',
   description: '将文本转换为模拟手写效果的G代码和预览图像',
 };
@@ -20,11 +18,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={handwritingFont.variable}>
-      <body className="min-h-screen bg-background">
-        <main className="container mx-auto py-8 px-4 max-w-6xl">
-          {children}
-        </main>
+    <html lang="zh-CN">
+      <body className={`${handwritingFont.variable} max-w-6xl mx-auto p-4 md:p-8`}>
+        {children}
       </body>
     </html>
   );

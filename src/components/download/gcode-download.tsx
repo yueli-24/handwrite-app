@@ -1,67 +1,81 @@
 "use client";
 
 import React from 'react';
-import { useClientSettingsStore } from '@/lib/store/client-store';
 import { Button } from '@/components/ui/button';
+import { useClientSettingsStore } from '@/lib/store/client-store';
 import { Download } from 'lucide-react';
 
 export const GcodeDownload = () => {
-  const { gcodeUrls } = useClientSettingsStore();
+  const { gcodeUrls, previewUrls } = useClientSettingsStore();
   
-  if (gcodeUrls.length === 0) {
-    return (
-      <Button disabled className="w-full">
-        <Download className="mr-2 h-4 w-4" />
-        下载G代码
-      </Button>
-    );
-  }
+  const handleDownload = (url: string, index: number) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `handwriting_page_${(index + 1).toString().padStart(3, '0')}.gcode`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   
   const handleDownloadAll = () => {
-    // 如果只有一个文件，直接下载
-    if (gcodeUrls.length === 1) {
-      window.open(gcodeUrls[0], '_blank');
-      return;
-    }
-    
-    // 如果有多个文件，创建一个隐藏的下载链接并点击
     gcodeUrls.forEach((url, index) => {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `page_${index + 1}.gcode`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // 添加延迟，避免浏览器阻止多个下载
-      setTimeout(() => {}, 500);
+      setTimeout(() => {
+        handleDownload(url, index);
+      }, index * 500); // 每个下载间隔500毫秒，避免浏览器阻止多个下载
     });
   };
   
+  if (gcodeUrls.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-md">
+        <Download className="h-8 w-8 text-gray-300 mb-2" />
+        <p className="text-gray-400 text-center">生成预览后可下载G代码文件</p>
+      </div>
+    );
+  }
+  
   return (
     <div className="space-y-4">
-      <Button 
-        onClick={handleDownloadAll}
-        className="w-full"
-      >
-        <Download className="mr-2 h-4 w-4" />
-        下载G代码 ({gcodeUrls.length} 个文件)
-      </Button>
+      <h3 className="text-lg font-medium">下载G代码</h3>
       
-      {gcodeUrls.length > 1 && (
-        <div className="grid grid-cols-2 gap-2">
-          {gcodeUrls.map((url, index) => (
-            <Button
-              key={index}
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(url, '_blank')}
-            >
-              下载第 {index + 1} 页
-            </Button>
-          ))}
+      {gcodeUrls.length === 1 ? (
+        <Button 
+          onClick={() => handleDownload(gcodeUrls[0], 0)}
+          className="w-full"
+        >
+          <Download className="h-4 w-4 mr-2" />
+          下载G代码文件
+        </Button>
+      ) : (
+        <div className="space-y-3">
+          <Button 
+            onClick={handleDownloadAll}
+            className="w-full"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            下载所有页面 ({gcodeUrls.length} 页)
+          </Button>
+          
+          <div className="text-sm text-gray-500 mb-2">或下载单个页面：</div>
+          
+          <div className="grid grid-cols-3 gap-2">
+            {gcodeUrls.map((url, index) => (
+              <Button 
+                key={index}
+                variant="outline"
+                size="sm"
+                onClick={() => handleDownload(url, index)}
+              >
+                第 {index + 1} 页
+              </Button>
+            ))}
+          </div>
         </div>
       )}
+      
+      <p className="text-xs text-gray-500">
+        G代码文件可用于控制绘图设备，实现手写效果的物理输出。
+      </p>
     </div>
   );
 };
