@@ -202,7 +202,7 @@ handwrite-app/
 
 如有任何问题或建议，请通过以下方式联系：
 
-- 项目仓库：[GitHub仓库链接]
+- 项目仓库：https://github.com/yueli-24/handwrite-app.git
 - 电子邮件：yue.work24@gmail.com
 
 ---

@@ -310,37 +310,59 @@ def generate_preview(text, font_size=8, margin_top=35, margin_bottom=25,
     
     return generator.process_text(text)
 
-def handler(event, context):
-    """Vercel Python函数处理器"""
+def handler(request):
+    """Vercel Python Serverless Function处理器
+    
+    按照Vercel要求的格式：def handler(request)
+    request是一个HTTP请求对象，而不是事件字典
+    """
     try:
         log_debug("收到请求")
-        log_debug(f"事件数据: {event}")
+        log_debug(f"请求方法: {request.method}")
         
         # 检查请求方法
-        if event.get('httpMethod') != 'POST':
+        if request.method != 'POST':
             log_debug("错误: 仅支持POST请求")
             return {
-                'statusCode': 405,
-                'body': json.dumps({'error': '仅支持POST请求'}),
-                'headers': {'Content-Type': 'application/json'}
+                "statusCode": 405,
+                "body": json.dumps({"error": "仅支持POST请求"}),
+                "headers": {"Content-Type": "application/json"}
             }
         
         # 解析请求体
         try:
-            if 'body' not in event:
-                log_debug("错误: 请求体为空")
+            # 获取请求体
+            try:
+                body = request.body
+                if not body:
+                    log_debug("错误: 请求体为空")
+                    return {
+                        "statusCode": 400,
+                        "body": json.dumps({"error": "请求体为空"}),
+                        "headers": {"Content-Type": "application/json"}
+                    }
+                
+                # 尝试解析JSON
+                if isinstance(body, dict):
+                    data = body
+                elif isinstance(body, bytes):
+                    data = json.loads(body.decode('utf-8'))
+                elif isinstance(body, str):
+                    data = json.loads(body)
+                else:
+                    log_debug(f"错误: 无法处理的请求体类型: {type(body)}")
+                    return {
+                        "statusCode": 400,
+                        "body": json.dumps({"error": f"无法处理的请求体类型: {type(body)}"}),
+                        "headers": {"Content-Type": "application/json"}
+                    }
+            except Exception as e:
+                log_debug(f"获取或解析请求体时出错: {str(e)}")
                 return {
-                    'statusCode': 400,
-                    'body': json.dumps({'error': '请求体为空'}),
-                    'headers': {'Content-Type': 'application/json'}
+                    "statusCode": 400,
+                    "body": json.dumps({"error": f"获取或解析请求体时出错: {str(e)}"}),
+                    "headers": {"Content-Type": "application/json"}
                 }
-            
-            # 检查body是否已经是JSON对象
-            if isinstance(event['body'], dict):
-                data = event['body']
-            else:
-                # 尝试解析JSON字符串
-                data = json.loads(event['body'])
             
             log_debug(f"请求数据: {data}")
             
@@ -355,9 +377,9 @@ def handler(event, context):
             if not text:
                 log_debug("错误: 文本内容为空")
                 return {
-                    'statusCode': 400,
-                    'body': json.dumps({'error': '文本内容不能为空'}),
-                    'headers': {'Content-Type': 'application/json'}
+                    "statusCode": 400,
+                    "body": json.dumps({"error": "文本内容不能为空"}),
+                    "headers": {"Content-Type": "application/json"}
                 }
             
             # 生成预览和G代码
@@ -385,39 +407,39 @@ def handler(event, context):
                 
                 log_debug(f"生成成功，共 {len(preview_base64)} 页")
                 return {
-                    'statusCode': 200,
-                    'body': json.dumps(response),
-                    'headers': {'Content-Type': 'application/json'}
+                    "statusCode": 200,
+                    "body": json.dumps(response),
+                    "headers": {"Content-Type": "application/json"}
                 }
                 
             except Exception as e:
                 log_debug(f"生成预览时出错: {str(e)}")
                 log_debug(f"错误详情: {traceback.format_exc()}")
                 return {
-                    'statusCode': 500,
-                    'body': json.dumps({
-                        'error': f"生成预览时出错: {str(e)}",
-                        'traceback': traceback.format_exc()
+                    "statusCode": 500,
+                    "body": json.dumps({
+                        "error": f"生成预览时出错: {str(e)}",
+                        "traceback": traceback.format_exc()
                     }),
-                    'headers': {'Content-Type': 'application/json'}
+                    "headers": {"Content-Type": "application/json"}
                 }
             
         except json.JSONDecodeError as e:
             log_debug(f"JSON解析错误: {str(e)}")
             return {
-                'statusCode': 400,
-                'body': json.dumps({'error': f'无效的JSON格式: {str(e)}'}),
-                'headers': {'Content-Type': 'application/json'}
+                "statusCode": 400,
+                "body": json.dumps({"error": f"无效的JSON格式: {str(e)}"}),
+                "headers": {"Content-Type": "application/json"}
             }
             
     except Exception as e:
         log_debug(f"处理请求时出错: {str(e)}")
         log_debug(f"错误详情: {traceback.format_exc()}")
         return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': f"处理请求时出错: {str(e)}",
-                'traceback': traceback.format_exc()
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": f"处理请求时出错: {str(e)}",
+                "traceback": traceback.format_exc()
             }),
-            'headers': {'Content-Type': 'application/json'}
+            "headers": {"Content-Type": "application/json"}
         }
