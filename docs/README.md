@@ -36,36 +36,64 @@
 ## 项目结构
 
 ```
-handwrite-app/
-├── public/                  # 静态资源
-│   └── fonts/               # 字体文件
-│       └── しょかきさらり行体.ttf  # 默认手写字体
-├── src/                     # 源代码
-│   ├── app/                 # Next.js App Router
-│   │   ├── api/             # API路由
-│   │   │   ├── generate/    # 生成预览和G代码
-│   │   │   ├── download/    # 下载G代码
-│   │   │   └── status/      # 系统状态检查
-│   │   ├── globals.css      # 全局样式
-│   │   ├── layout.tsx       # 应用布局
-│   │   └── page.tsx         # 主页面
-│   ├── components/          # React组件
-│   │   ├── ui/              # 基础UI组件
-│   │   ├── text-input/      # 文本输入组件
-│   │   ├── settings/        # 设置调整组件
-│   │   ├── preview/         # 预览显示组件
-│   │   └── download/        # G代码下载组件
-│   └── lib/                 # 工具库
-│       ├── hooks/           # React钩子
-│       ├── store/           # 状态管理
-│       ├── utils/           # 工具函数
-│       └── python/          # Python脚本
-│           └── handwrite.py # 核心手写生成脚本
-├── next.config.js           # Next.js配置
-├── postcss.config.js        # PostCSS配置
-├── tailwind.config.js       # TailwindCSS配置
-├── tsconfig.json            # TypeScript配置
-└── package.json             # 项目依赖
+├── docs
+│   ├── README.md
+│   ├── debug-report.md
+│   ├── deployment-guide.md
+│   ├── enhanced-error-handling.md
+│   ├── images
+│   ├── user-guide.md
+│   ├── vercel-deployment-fix.md
+│   ├── vercel-deployment-guide.md
+│   ├── vercel-production-error-handling.md
+│   └── vercel-python-fix.md
+├── next-env.d.ts
+├── next.config.js
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── public
+│   └── fonts
+│       └── しょかきさらり行体.ttf
+├── requirements.txt 
+├── src
+│   ├── app
+│   │   ├── api
+│   │   │   ├── download
+│   │   │   ├── generate
+│   │   │   └── status
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── components
+│   │   ├── download
+│   │   │   └── gcode-download.tsx
+│   │   ├── preview
+│   │   │   ├── image-preview.tsx
+│   │   │   └── preview-panel.tsx
+│   │   ├── settings
+│   │   │   └── settings-components.tsx
+│   │   ├── text-input
+│   │   │   └── text-input.tsx
+│   │   └── ui
+│   │       ├── button.tsx
+│   │       ├── input.tsx
+│   │       ├── slider.tsx
+│   │       ├── tabs.tsx
+│   │       └── textarea.tsx
+│   └── lib
+│       ├── hooks
+│       │   └── use-preview-generator.ts
+│       ├── python
+│       │   └── handwrite.py
+│       ├── store
+│       │   ├── client-store.ts
+│       │   └── settings-store.ts
+│       └── utils
+│           └── cn.ts
+├── tailwind.config.js
+├── tsconfig.json
+└── vercel.json
 ```
 
 ## 安装与运行
