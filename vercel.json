@@ -8,6 +8,14 @@
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "env": {
-    "PYTHON_ENABLED": "true"
+    "PYTHON_ENABLED": "true",
+    "PYTHONPATH": "/var/task",
+    "PYTHONUNBUFFERED": "1"
+  },
+  "functions": {
+    "api/python/*.py": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
   }
 }
