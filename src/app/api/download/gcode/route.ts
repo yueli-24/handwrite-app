@@ -1,39 +1,41 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
+import { NextResponse } from 'next/server';
 import path from 'path';
+import fs from 'fs';
+import os from 'os';
 
-export async function GET(request: NextRequest) {
+// 使用与generate路由相同的临时目录
+const tempDir = path.join(os.tmpdir(), 'handwrite-app');
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const file = searchParams.get('file');
+  
+  if (!file) {
+    return NextResponse.json({ error: '文件参数缺失' }, { status: 400 });
+  }
+  
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const page = searchParams.get('page');
-    const dir = searchParams.get('dir');
+    const filePath = path.join(tempDir, file);
     
-    if (!page || !dir) {
-      return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
+    if (!fs.existsSync(filePath)) {
+      return NextResponse.json({ error: '文件不存在' }, { status: 404 });
     }
     
-    // 构建G代码文件路径
-    const filePath = path.join(dir, `page_${page.padStart(3, '0')}.gcode`);
+    const fileBuffer = fs.readFileSync(filePath);
+    const fileName = path.basename(file);
     
-    try {
-      // 读取文件内容
-      const fileContent = await fs.readFile(filePath, 'utf-8');
-      
-      // 设置响应头，使浏览器将响应视为下载文件
-      const headers = new Headers();
-      headers.set('Content-Type', 'application/octet-stream');
-      headers.set('Content-Disposition', `attachment; filename="page_${page.padStart(3, '0')}.gcode"`);
-      
-      return new NextResponse(fileContent, {
-        status: 200,
-        headers
-      });
-    } catch (error) {
-      console.error('File read error:', error);
-      return NextResponse.json({ error: '文件不存在或无法读取' }, { status: 404 });
-    }
+    return new NextResponse(fileBuffer, {
+      headers: {
+        'Content-Type': 'text/x-gcode',
+        'Content-Disposition': `attachment; filename="${fileName}"`,
+        'Cache-Control': 'public, max-age=3600'
+      }
+    });
   } catch (error) {
-    console.error('Download API error:', error);
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    console.error('下载G代码文件时出错:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : '下载G代码文件失败' },
+      { status: 500 }
+    );
   }
 }

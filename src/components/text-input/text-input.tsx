@@ -1,10 +1,10 @@
 "use client";
 
 import React from 'react';
-import { useClientSettingsStore } from '@/lib/store/client-store';
 import { useDropzone } from 'react-dropzone';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { useClientSettingsStore } from '@/lib/store/client-store';
 import { Upload } from 'lucide-react';
 
 export const TextInput = () => {
@@ -27,8 +27,12 @@ export const TextInput = () => {
     accept: {
       'text/plain': ['.txt']
     },
-    maxFiles: 1
+    multiple: false
   });
+  
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(e.target.value);
+  };
   
   return (
     <div className="space-y-4">
@@ -38,10 +42,10 @@ export const TextInput = () => {
         </label>
         <Textarea
           id="text-input"
-          placeholder="请输入要转换为手写体的文字..."
+          placeholder="在此输入要转换为手写体的文字..."
           className="min-h-[200px] resize-y"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleTextChange}
         />
       </div>
       
@@ -52,20 +56,30 @@ export const TextInput = () => {
         }`}
       >
         <input {...getInputProps()} />
-        <div className="flex flex-col items-center justify-center gap-2">
+        <div className="flex flex-col items-center justify-center space-y-2">
           <Upload className="h-8 w-8 text-gray-400" />
-          {isDragActive ? (
-            <p>拖放文件到这里...</p>
-          ) : (
-            <>
-              <p className="text-sm text-gray-600">拖放TXT文件到这里，或点击选择文件</p>
-              <Button type="button" variant="outline" size="sm">
-                选择文件
-              </Button>
-            </>
-          )}
+          <p className="text-sm text-gray-600">
+            {isDragActive
+              ? "拖放文件到这里..."
+              : "拖放TXT文件到这里，或点击选择文件"}
+          </p>
+          <p className="text-xs text-gray-400">
+            仅支持TXT文本文件
+          </p>
         </div>
       </div>
+      
+      {text && (
+        <div className="flex justify-end">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setText('')}
+          >
+            清空文本
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

@@ -4,16 +4,27 @@ import React from 'react';
 import { useClientSettingsStore } from '@/lib/store/client-store';
 
 export const usePreviewGenerator = () => {
-  const { text, fontSize, marginTop, marginBottom, marginLeft, marginRight, paperSize, setPreviewUrls, setGcodeUrls } = useClientSettingsStore();
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-
-  const generatePreview = async () => {
+  
+  const {
+    text,
+    fontSize,
+    marginTop,
+    marginBottom,
+    marginLeft,
+    marginRight,
+    paperSize,
+    setPreviewUrls,
+    setGcodeUrls
+  } = useClientSettingsStore();
+  
+  const generatePreview = React.useCallback(async () => {
     if (!text.trim()) {
       setError('请输入文字内容');
       return;
     }
-
+    
     setIsGenerating(true);
     setError(null);
     
@@ -25,36 +36,41 @@ export const usePreviewGenerator = () => {
         },
         body: JSON.stringify({
           text,
-          settings: {
-            fontSize,
-            marginTop,
-            marginBottom,
-            marginLeft,
-            marginRight,
-            paperSize,
-          },
+          fontSize,
+          marginTop,
+          marginBottom,
+          marginLeft,
+          marginRight,
+          paperSize
         }),
       });
       
-      const data = await response.json();
-      
-      if (data.success) {
-        setPreviewUrls(data.previewUrls);
-        setGcodeUrls(data.gcodeUrls);
-        return true;
-      } else {
-        setError(data.error || '生成失败');
-        return false;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '生成预览失败');
       }
-    } catch (error) {
-      console.error('生成错误:', error);
-      setError('生成过程中发生错误，请重试');
-      return false;
+      
+      const data = await response.json();
+      setPreviewUrls(data.previewUrls);
+      setGcodeUrls(data.gcodeUrls);
+    } catch (err) {
+      console.error('生成预览时出错:', err);
+      setError(err instanceof Error ? err.message : '生成预览失败，请稍后重试');
     } finally {
       setIsGenerating(false);
     }
-  };
-
+  }, [
+    text,
+    fontSize,
+    marginTop,
+    marginBottom,
+    marginLeft,
+    marginRight,
+    paperSize,
+    setPreviewUrls,
+    setGcodeUrls
+  ]);
+  
   return {
     isGenerating,
     error,
