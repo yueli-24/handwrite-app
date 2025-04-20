@@ -250,66 +250,32 @@ class HandwritingGenerator:
         prev_x, prev_y = 0, 0
         
         for line in self.gcode:
-            if 'G1 X' in line and 'Y' in line:
+            if line.startswith('G1'):
                 parts = line.split()
-                for part in parts:
-                    if part.startswith('X'):
-                        x = float(part[1:]) * dpi / 25.4
-                    elif part.startswith('Y'):
-                        y = float(part[1:]) * dpi / 25.4
-                
-                if pen_down:
-                    draw.line([prev_x, prev_y, x, y], fill='black', width=1)
-                
-                prev_x, prev_y = x, y
-            
-            if 'Z0' in line:  # 笔放下
-                pen_down = True
-            elif 'Z5' in line:  # 笔抬起
-                pen_down = False
+                if len(parts) >= 2:
+                    x_val = None
+                    y_val = None
+                    for part in parts[1:]:
+                        if part.startswith('X'):
+                            x_val = float(part[1:])
+                        elif part.startswith('Y'):
+                            y_val = float(part[1:])
+                        elif part.startswith('Z'):
+                            z_val = float(part[1:])
+                            pen_down = z_val < 2.5  # 如果Z值小于2.5，认为笔是放下的
+                    
+                    if x_val is not None and y_val is not None:
+                        # 转换坐标到像素
+                        x_px = int(x_val * dpi / 25.4)
+                        y_px = int(y_val * dpi / 25.4)
+                        
+                        if pen_down and prev_x is not None and prev_y is not None:
+                            # 绘制线条
+                            draw.line([(prev_x, prev_y), (x_px, y_px)], fill='black', width=1)
+                        
+                        prev_x, prev_y = x_px, y_px
         
         return image
-
-def generate_preview(text, font_size=8, margin_top=35, margin_bottom=25, 
-                    margin_left=30, margin_right=30, paper_size='A4'):
-    """生成预览图像和G代码"""
-    log_debug("开始生成预览")
-    
-    # 尝试查找字体文件
-    font_path = None
-    possible_font_paths = [
-        os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
-        os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
-        os.path.join(os.path.dirname(os.getcwd()), 'public', 'fonts', 'しょかきさらり行体.ttf'),
-        os.path.join('/tmp', 'fonts', 'しょかきさらり行体.ttf'),
-        # Vercel环境中的可能路径
-        '/var/task/public/fonts/しょかきさらり行体.ttf',
-        '/var/task/fonts/しょかきさらり行体.ttf'
-    ]
-    
-    for path in possible_font_paths:
-        log_debug(f"检查字体路径: {path}")
-        if os.path.exists(path):
-            font_path = path
-            log_debug(f"找到字体文件: {path}")
-            break
-    
-    if not font_path:
-        log_debug("未找到字体文件，将使用默认字体")
-        # 使用PIL默认字体
-        font_path = ""
-    
-    generator = HandwritingGenerator(
-        font_path=font_path,
-        font_size=font_size,
-        margin_top=margin_top,
-        margin_bottom=margin_bottom,
-        margin_left=margin_left,
-        margin_right=margin_right,
-        paper_size=paper_size
-    )
-    
-    return generator.process_text(text)
 
 def handler(request):
     """Vercel Python Serverless Function处理器"""
