@@ -12,6 +12,8 @@ import numpy as np
 import random
 import math
 import functools
+from http.server import BaseHTTPRequestHandler
+from typing import Any, Dict, List, Tuple, Union
 
 # 调试信息
 DEBUG = True
@@ -30,8 +32,8 @@ log_debug(f"Python路径: {sys.path}")
 
 # 简化版的手写生成器，直接内嵌在API中，避免导入问题
 class HandwritingGenerator:
-    def __init__(self, font_path, font_size=8, margin_top=35, margin_bottom=25, 
-                margin_left=30, margin_right=30, paper_size='A4'):
+    def __init__(self, font_path: str, font_size: int = 8, margin_top: int = 35, margin_bottom: int = 25, 
+                margin_left: int = 30, margin_right: int = 30, paper_size: str = 'A4'):
         self.font_path = font_path
         self.font_size = font_size
         self.margin_top = margin_top
@@ -85,7 +87,7 @@ class HandwritingGenerator:
         self.gcode = []
         self.init_gcode()
     
-    def init_gcode(self):
+    def init_gcode(self) -> None:
         """初始化G代码"""
         self.gcode = [
             "G21 ; 设置单位为毫米",
@@ -95,7 +97,7 @@ class HandwritingGenerator:
             f"G1 X{self.margin_left} Y{self.margin_top} F3000 ; 移动到起始位置"
         ]
     
-    def process_text(self, text):
+    def process_text(self, text: str) -> Tuple[List[str], List[str]]:
         """处理文本，生成G代码和预览图像"""
         log_debug("开始处理文本")
         # 直接在内存中处理，避免文件系统操作
@@ -156,7 +158,6 @@ class HandwritingGenerator:
                 self.add_char_gcode(char)
                 
                 # 更新位置
-                import random
                 self.x += self.font_size * (1 + 0.1 * random.random())  # 添加一些随机间距
             
             # 行尾换行
@@ -198,11 +199,10 @@ class HandwritingGenerator:
         log_debug(f"文本处理完成，生成了 {len(preview_base64)} 页")
         return preview_base64, gcode_content
     
-    def add_char_gcode(self, char):
+    def add_char_gcode(self, char: str) -> None:
         """为字符添加G代码"""
         # 简化版本，实际应该根据字体轮廓生成G代码
         # 这里只是模拟一个简单的写字动作
-        import random
         x_jitter = 0.2 * random.random() - 0.1  # -0.1到0.1的随机抖动
         y_jitter = 0.2 * random.random() - 0.1  # -0.1到0.1的随机抖动
         
@@ -211,7 +211,6 @@ class HandwritingGenerator:
         self.gcode.append(f"G1 Z0 F1000 ; 放下笔")
         
         # 模拟写字的几个点
-        import math
         for i in range(5):
             x_offset = (i / 4) * self.font_size * 0.8
             y_offset = math.sin(i * math.pi / 2) * self.font_size * 0.3
@@ -219,7 +218,7 @@ class HandwritingGenerator:
         
         self.gcode.append(f"G1 Z5 F1000 ; 抬起笔")
     
-    def create_preview(self):
+    def create_preview(self) -> Image.Image:
         """创建预览图像"""
         # 创建空白图像
         dpi = 72
@@ -276,6 +275,112 @@ class HandwritingGenerator:
                         prev_x, prev_y = x_px, y_px
         
         return image
+
+class RequestHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        """处理POST请求"""
+        try:
+            # 获取请求体长度
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length == 0:
+                self.send_error(400, "请求体为空")
+                return
+            
+            # 读取请求体
+            body = self.rfile.read(content_length)
+            
+            # 解析JSON
+            try:
+                data = json.loads(body.decode('utf-8'))
+            except json.JSONDecodeError as e:
+                self.send_error(400, f"无效的JSON格式: {str(e)}")
+                return
+            
+            # 验证必要参数
+            required_params = ['text']
+            missing_params = [param for param in required_params if param not in data]
+            if missing_params:
+                self.send_error(400, f"缺少必要参数: {', '.join(missing_params)}")
+                return
+            
+            # 获取参数
+            text = data.get('text', '')
+            font_size = int(data.get('fontSize', 8))
+            margin_top = int(data.get('marginTop', 35))
+            margin_bottom = int(data.get('marginBottom', 25))
+            margin_left = int(data.get('marginLeft', 30))
+            margin_right = int(data.get('marginRight', 30))
+            paper_size = data.get('paperSize', 'A4')
+            
+            # 验证参数
+            if not text.strip():
+                self.send_error(400, "文本内容不能为空")
+                return
+            
+            # 尝试查找字体文件
+            font_path = None
+            possible_font_paths = [
+                os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
+                os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
+                os.path.join(os.path.dirname(os.getcwd()), 'public', 'fonts', 'しょかきさらり行体.ttf'),
+                os.path.join('/tmp', 'fonts', 'しょかきさらり行体.ttf'),
+                # Vercel环境中的可能路径
+                '/var/task/public/fonts/しょかきさらり行体.ttf',
+                '/var/task/fonts/しょかきさらり行体.ttf'
+            ]
+            
+            for path in possible_font_paths:
+                log_debug(f"检查字体路径: {path}")
+                if os.path.exists(path):
+                    font_path = path
+                    log_debug(f"找到字体文件: {path}")
+                    break
+            
+            if not font_path:
+                log_debug("未找到字体文件，将使用默认字体")
+                font_path = ""
+            
+            # 生成预览
+            try:
+                log_debug("开始生成预览")
+                generator = HandwritingGenerator(
+                    font_path=font_path,
+                    font_size=font_size,
+                    margin_top=margin_top,
+                    margin_bottom=margin_bottom,
+                    margin_left=margin_left,
+                    margin_right=margin_right,
+                    paper_size=paper_size
+                )
+                
+                preview_base64, gcode_content = generator.process_text(text)
+                
+                # 构建响应
+                response = {
+                    "success": True,
+                    "sessionId": str(uuid.uuid4()),
+                    "previewBase64": preview_base64,
+                    "gcodeContent": gcode_content
+                }
+                
+                log_debug(f"预览生成成功，页数: {len(preview_base64)}")
+                
+                # 发送响应
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+                
+            except Exception as e:
+                log_debug(f"生成预览时出错: {str(e)}")
+                log_debug(f"错误堆栈: {traceback.format_exc()}")
+                self.send_error(500, f"生成预览失败: {str(e)}")
+                
+        except Exception as e:
+            log_debug(f"处理请求时出错: {str(e)}")
+            log_debug(f"错误堆栈: {traceback.format_exc()}")
+            self.send_error(500, f"处理请求失败: {str(e)}")
 
 def handler(request):
     """Vercel Python Serverless Function处理器"""
