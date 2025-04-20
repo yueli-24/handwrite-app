@@ -47,14 +47,30 @@
    - 添加以下环境变量：
      - 名称：`PYTHON_ENABLED`
      - 值：`true`
+     - 环境：Production, Preview, Development
 
-5. **部署项目**
+5. **Python 运行时配置**
+   - 在项目设置中，确保启用了 Python 运行时
+   - 检查 `vercel.json` 文件中的 Python 构建配置：
+     ```json
+     {
+       "builds": [
+         { "src": "api/python/*.py", "use": "@vercel/python" },
+         { "src": "package.json", "use": "@vercel/next" }
+       ]
+     }
+     ```
+   - 确保 `api/python` 目录中的 Python 文件被正确识别
+
+6. **部署项目**
    - 点击 "Deploy" 按钮
    - 等待部署完成（通常需要 1-2 分钟）
+   - 检查构建日志，确保 Python 依赖正确安装
 
-6. **验证部署**
+7. **验证部署**
    - 部署完成后，Vercel 会提供一个域名（例如 `your-project.vercel.app`）
    - 访问该域名，确认应用正常运行
+   - 测试预览生成功能，确保 Python 后端正常工作
 
 ### 自定义域名（可选）
 

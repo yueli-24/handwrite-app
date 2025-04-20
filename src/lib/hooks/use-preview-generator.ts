@@ -70,7 +70,7 @@ export const usePreviewGenerator = () => {
 
       // 添加超时处理
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
       try {
         const response = await fetch('/api/generate', {
