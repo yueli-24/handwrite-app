@@ -2,7 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ['localhost'],
+    domains: ['localhost', 'handwrite-app.vercel.app'],
+  },
+  experimental: {
+    serverActions: true,
   },
 };
 
