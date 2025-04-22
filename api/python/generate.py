@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 import random
 import math
+import functools
 from typing import Any, Dict, List, Tuple, Union
 
 # 调试信息
@@ -31,7 +32,7 @@ log_debug(f"Python路径: {sys.path}")
 # 简化版的手写生成器，直接内嵌在API中，避免导入问题
 class HandwritingGenerator:
     def __init__(self, font_path: str, font_size: int = 8, margin_top: int = 35, margin_bottom: int = 25, 
-                 margin_left: int = 30, margin_right: int = 30, paper_size: str = 'A4'):
+                margin_left: int = 30, margin_right: int = 30, paper_size: str = 'A4'):
         self.font_path = font_path
         self.font_size = font_size
         self.margin_top = margin_top
@@ -39,7 +40,7 @@ class HandwritingGenerator:
         self.margin_left = margin_left
         self.margin_right = margin_right
         self.paper_size = paper_size
-
+        
         # 设置纸张尺寸（单位：毫米）
         if paper_size == 'A4':
             self.paper_width = 210
@@ -52,11 +53,11 @@ class HandwritingGenerator:
             self.paper_height = 250
         else:
             raise ValueError(f"不支持的纸张规格: {paper_size}")
-
+        
         # 计算可写区域
         self.writing_width = self.paper_width - self.margin_left - self.margin_right
         self.writing_height = self.paper_height - self.margin_top - self.margin_bottom
-
+        
         # 加载字体
         try:
             if self.font_path and os.path.exists(self.font_path):
@@ -72,35 +73,36 @@ class HandwritingGenerator:
             # 使用默认字体作为备选
             self.font = ImageFont.load_default()
             log_debug("已加载默认字体")
-
+        
         # 初始化当前位置
         self.x = self.margin_left
         self.y = self.margin_top
         self.line_height = self.font_size * 1.5  # 行高为字体大小的1.5倍
-
+        
         # 初始化页面计数
         self.page_count = 1
-
+        
         # 初始化G代码
         self.gcode = []
         self.init_gcode()
-
+    
     def init_gcode(self) -> None:
         """初始化G代码"""
         self.gcode = [
-            "G21",          # mmモード
-            "G90",          # 絶対座標モード
-            f"F20000",      # 基本送り速度設定
-            "G1G90 Z0.0F20000"  # 初期位置でペンを上げる
+            "G21 ; 设置单位为毫米",
+            "G90 ; 使用绝对坐标",
+            "G92 X0 Y0 Z0 ; 设置当前位置为原点",
+            "G1 Z5 F1000 ; 抬起笔",
+            f"G1 X{self.margin_left} Y{self.margin_top} F3000 ; 移动到起始位置"
         ]
-
+    
     def process_text(self, text: str) -> Tuple[List[str], List[str]]:
         """处理文本，生成G代码和预览图像"""
         log_debug("开始处理文本")
         # 直接在内存中处理，避免文件系统操作
         preview_base64 = []
         gcode_content = []
-
+        
         # 处理文本
         lines = text.split('\n')
         for line in lines:
@@ -114,24 +116,24 @@ class HandwritingGenerator:
                     preview_img.save(buffered, format="PNG")
                     img_str = base64.b64encode(buffered.getvalue()).decode()
                     preview_base64.append(img_str)
-
+                    
                     # 保存G代码
                     gcode_content.append('\n'.join(self.gcode))
-
+                    
                     # 准备新页面
                     self.page_count += 1
                     self.x = self.margin_left
                     self.y = self.margin_top
                     self.init_gcode()
                 continue
-
+            
             # 处理一行文字
             for char in line:
                 # 检查是否需要换行
                 if self.x + self.font_size > self.margin_left + self.writing_width:
                     self.x = self.margin_left
                     self.y += self.line_height
-
+                    
                     # 检查是否需要新页面
                     if self.y + self.line_height > self.margin_top + self.writing_height:
                         # 创建预览图像
@@ -141,26 +143,26 @@ class HandwritingGenerator:
                         preview_img.save(buffered, format="PNG")
                         img_str = base64.b64encode(buffered.getvalue()).decode()
                         preview_base64.append(img_str)
-
+                        
                         # 保存G代码
                         gcode_content.append('\n'.join(self.gcode))
-
+                        
                         # 准备新页面
                         self.page_count += 1
                         self.x = self.margin_left
                         self.y = self.margin_top
                         self.init_gcode()
-
+                
                 # 添加字符的G代码
                 self.add_char_gcode(char)
-
+                
                 # 更新位置
                 self.x += self.font_size * (1 + 0.1 * random.random())  # 添加一些随机间距
-
+            
             # 行尾换行
             self.x = self.margin_left
             self.y += self.line_height
-
+            
             # 检查是否需要新页面
             if self.y + self.line_height > self.margin_top + self.writing_height:
                 # 创建预览图像
@@ -170,16 +172,16 @@ class HandwritingGenerator:
                 preview_img.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
                 preview_base64.append(img_str)
-
+                
                 # 保存G代码
                 gcode_content.append('\n'.join(self.gcode))
-
+                
                 # 准备新页面
                 self.page_count += 1
                 self.x = self.margin_left
                 self.y = self.margin_top
                 self.init_gcode()
-
+        
         # 处理最后一页
         if self.gcode and self.gcode[-1] != "G1 Z5 F1000 ; 抬起笔":
             # 创建预览图像
@@ -189,22 +191,89 @@ class HandwritingGenerator:
             preview_img.save(buffered, format="PNG")
             img_str = base64.b64encode(buffered.getvalue()).decode()
             preview_base64.append(img_str)
-
+            
             # 保存G代码
             gcode_content.append('\n'.join(self.gcode))
-
+        
         log_debug(f"文本处理完成，生成了 {len(preview_base64)} 页")
         return preview_base64, gcode_content
-
+    
     def add_char_gcode(self, char: str) -> None:
         """为字符添加G代码"""
-        # 这里需要实现具体的字符G代码生成逻辑
-        pass
-
+        # 简化版本，实际应该根据字体轮廓生成G代码
+        # 这里只是模拟一个简单的写字动作
+        x_jitter = 0.2 * random.random() - 0.1  # -0.1到0.1的随机抖动
+        y_jitter = 0.2 * random.random() - 0.1  # -0.1到0.1的随机抖动
+        
+        self.gcode.append(f"G1 Z5 F1000 ; 抬起笔")
+        self.gcode.append(f"G1 X{self.x + x_jitter} Y{self.y + y_jitter} F3000 ; 移动到字符位置")
+        self.gcode.append(f"G1 Z0 F1000 ; 放下笔")
+        
+        # 模拟写字的几个点
+        for i in range(5):
+            x_offset = (i / 4) * self.font_size * 0.8
+            y_offset = math.sin(i * math.pi / 2) * self.font_size * 0.3
+            self.gcode.append(f"G1 X{self.x + x_offset + x_jitter} Y{self.y + y_offset + y_jitter} F1000 ; 写字")
+        
+        self.gcode.append(f"G1 Z5 F1000 ; 抬起笔")
+    
     def create_preview(self) -> Image.Image:
         """创建预览图像"""
-        # 这里需要实现具体的预览图像生成逻辑
-        pass
+        # 创建空白图像
+        dpi = 72
+        width_px = int(self.paper_width * dpi / 25.4)
+        height_px = int(self.paper_height * dpi / 25.4)
+        image = Image.new('RGB', (width_px, height_px), color='white')
+        draw = ImageDraw.Draw(image)
+        
+        # 绘制边框
+        margin_left_px = int(self.margin_left * dpi / 25.4)
+        margin_top_px = int(self.margin_top * dpi / 25.4)
+        margin_right_px = int(self.margin_right * dpi / 25.4)
+        margin_bottom_px = int(self.margin_bottom * dpi / 25.4)
+        
+        draw.rectangle(
+            [
+                margin_left_px, 
+                margin_top_px, 
+                width_px - margin_right_px, 
+                height_px - margin_bottom_px
+            ],
+            outline='lightgray'
+        )
+        
+        # 解析G代码并绘制
+        x, y = 0, 0
+        pen_down = False
+        prev_x, prev_y = 0, 0
+        
+        for line in self.gcode:
+            if line.startswith('G1'):
+                parts = line.split()
+                if len(parts) >= 2:
+                    x_val = None
+                    y_val = None
+                    for part in parts[1:]:
+                        if part.startswith('X'):
+                            x_val = float(part[1:])
+                        elif part.startswith('Y'):
+                            y_val = float(part[1:])
+                        elif part.startswith('Z'):
+                            z_val = float(part[1:])
+                            pen_down = z_val < 2.5  # 如果Z值小于2.5，认为笔是放下的
+                    
+                    if x_val is not None and y_val is not None:
+                        # 转换坐标到像素
+                        x_px = int(x_val * dpi / 25.4)
+                        y_px = int(y_val * dpi / 25.4)
+                        
+                        if pen_down and prev_x is not None and prev_y is not None:
+                            # 绘制线条
+                            draw.line([(prev_x, prev_y), (x_px, y_px)], fill='black', width=1)
+                        
+                        prev_x, prev_y = x_px, y_px
+        
+        return image
 
 def handler(request):
     """Vercel Python Serverless Function处理器"""
@@ -215,11 +284,11 @@ def handler(request):
         log_debug(f"目录内容: {os.listdir('.')}")
         log_debug(f"Python版本: {sys.version}")
         log_debug(f"Python路径: {sys.path}")
-
+        
         # 获取请求方法
         request_method = getattr(request, 'method', 'UNKNOWN')
         log_debug(f"请求方法: {request_method}")
-
+        
         # 检查请求方法
         if request_method != 'POST':
             log_debug("错误: 仅支持POST请求")
@@ -234,7 +303,7 @@ def handler(request):
                     "Access-Control-Allow-Origin": "*"
                 }
             }
-
+        
         # 解析请求体
         try:
             # 获取请求体
@@ -248,7 +317,7 @@ def handler(request):
             elif hasattr(request, 'json') and callable(request.json):
                 body = request.json()
                 log_debug(f"通过request.json()获取到请求体，类型: {type(body)}")
-
+            
             if not body:
                 log_debug("无法获取请求体")
                 return {
@@ -262,7 +331,7 @@ def handler(request):
                         "Access-Control-Allow-Origin": "*"
                     }
                 }
-
+            
             # 解析JSON
             try:
                 if isinstance(body, str):
@@ -285,7 +354,7 @@ def handler(request):
                         "Access-Control-Allow-Origin": "*"
                     }
                 }
-
+            
             # 验证必要参数
             required_params = ['text']
             missing_params = [param for param in required_params if param not in data]
@@ -302,7 +371,7 @@ def handler(request):
                         "Access-Control-Allow-Origin": "*"
                     }
                 }
-
+            
             # 获取参数
             text = data.get('text', '')
             font_size = int(data.get('fontSize', 8))
@@ -311,7 +380,7 @@ def handler(request):
             margin_left = int(data.get('marginLeft', 30))
             margin_right = int(data.get('marginRight', 30))
             paper_size = data.get('paperSize', 'A4')
-
+            
             # 验证参数
             if not text.strip():
                 log_debug("文本内容为空")
@@ -326,7 +395,7 @@ def handler(request):
                         "Access-Control-Allow-Origin": "*"
                     }
                 }
-
+            
             # 尝试查找字体文件
             font_path = None
             possible_font_paths = [
@@ -338,18 +407,18 @@ def handler(request):
                 '/var/task/public/fonts/しょかきさらり行体.ttf',
                 '/var/task/fonts/しょかきさらり行体.ttf'
             ]
-
+            
             for path in possible_font_paths:
                 log_debug(f"检查字体路径: {path}")
                 if os.path.exists(path):
                     font_path = path
                     log_debug(f"找到字体文件: {path}")
                     break
-
+            
             if not font_path:
                 log_debug("未找到字体文件，将使用默认字体")
                 font_path = ""
-
+            
             # 生成预览
             try:
                 log_debug("开始生成预览")
@@ -362,10 +431,68 @@ def handler(request):
                     margin_right=margin_right,
                     paper_size=paper_size
                 )
-
+                
                 preview_base64, gcode_content = generator.process_text(text)
-
+                
                 # 构建响应
                 response = {
                     "success": True,
                     "sessionId": str(uuid.uuid4()),
+                    "previewBase64": preview_base64,
+                    "gcodeContent": gcode_content
+                }
+                
+                log_debug(f"预览生成成功，页数: {len(preview_base64)}")
+                return {
+                    "statusCode": 200,
+                    "body": json.dumps(response),
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*"
+                    }
+                }
+                
+            except Exception as e:
+                log_debug(f"生成预览时出错: {str(e)}")
+                log_debug(f"错误堆栈: {traceback.format_exc()}")
+                return {
+                    "statusCode": 500,
+                    "body": json.dumps({
+                        "error": f"生成预览失败: {str(e)}",
+                        "trace": traceback.format_exc()
+                    }),
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*"
+                    }
+                }
+                
+        except Exception as e:
+            log_debug(f"处理请求时出错: {str(e)}")
+            log_debug(f"错误堆栈: {traceback.format_exc()}")
+            return {
+                "statusCode": 500,
+                "body": json.dumps({
+                    "error": f"处理请求失败: {str(e)}",
+                    "trace": traceback.format_exc()
+                }),
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                }
+            }
+            
+    except Exception as e:
+        log_debug(f"未处理的异常: {str(e)}")
+        log_debug(f"错误堆栈: {traceback.format_exc()}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": f"服务器内部错误: {str(e)}",
+                "trace": traceback.format_exc()
+            }),
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            }
+        }
