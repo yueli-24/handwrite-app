@@ -13,6 +13,7 @@ import random
 import math
 import functools
 from typing import Any, Dict, List, Tuple, Union
+from http.server import BaseHTTPRequestHandler
 
 # 调试信息
 DEBUG = True
@@ -275,102 +276,64 @@ class HandwritingGenerator:
         
         return image
 
-def handler(request):
-    """Vercel Python Serverless Function处理器"""
-    try:
-        # 记录详细的环境信息，帮助调试
-        log_debug("===== 开始处理请求 =====")
-        log_debug(f"当前工作目录: {os.getcwd()}")
-        log_debug(f"目录内容: {os.listdir('.')}")
-        log_debug(f"Python版本: {sys.version}")
-        log_debug(f"Python路径: {sys.path}")
-        
-        # 获取请求方法
-        request_method = getattr(request, 'method', 'UNKNOWN')
-        log_debug(f"请求方法: {request_method}")
-        
-        # 检查请求方法
-        if request_method != 'POST':
-            log_debug("错误: 仅支持POST请求")
-            return {
-                "statusCode": 405,
-                "body": json.dumps({
-                    "error": "仅支持POST请求",
-                    "trace": "Method not allowed"
-                }),
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                }
-            }
-        
-        # 解析请求体
+class Handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        """处理POST请求"""
         try:
+            # 记录详细的环境信息，帮助调试
+            log_debug("===== 开始处理请求 =====")
+            log_debug(f"当前工作目录: {os.getcwd()}")
+            log_debug(f"目录内容: {os.listdir('.')}")
+            log_debug(f"Python版本: {sys.version}")
+            log_debug(f"Python路径: {sys.path}")
+            
             # 获取请求体
-            body = None
-            if hasattr(request, 'body'):
-                body = request.body
-                log_debug(f"通过request.body获取到请求体，类型: {type(body)}")
-            elif hasattr(request, 'read') and callable(request.read):
-                body = request.read()
-                log_debug(f"通过request.read()获取到请求体，类型: {type(body)}")
-            elif hasattr(request, 'json') and callable(request.json):
-                body = request.json()
-                log_debug(f"通过request.json()获取到请求体，类型: {type(body)}")
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            log_debug(f"请求体长度: {content_length}")
             
             if not body:
                 log_debug("无法获取请求体")
-                return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        "error": "无法获取请求体",
-                        "trace": "No request body found"
-                    }),
-                    "headers": {
-                        "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*"
-                    }
-                }
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "error": "无法获取请求体",
+                    "trace": "No request body found"
+                }).encode())
+                return
             
             # 解析JSON
             try:
-                if isinstance(body, str):
-                    data = json.loads(body)
-                elif isinstance(body, bytes):
-                    data = json.loads(body.decode('utf-8'))
-                else:
-                    data = body
+                data = json.loads(body.decode('utf-8'))
                 log_debug(f"解析后的数据: {data}")
             except json.JSONDecodeError as e:
                 log_debug(f"JSON解析错误: {str(e)}")
-                return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        "error": "无效的JSON格式",
-                        "trace": str(e)
-                    }),
-                    "headers": {
-                        "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*"
-                    }
-                }
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "error": "无效的JSON格式",
+                    "trace": str(e)
+                }).encode())
+                return
             
             # 验证必要参数
             required_fields = ['text', 'fontSize', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'paperSize']
             for field in required_fields:
                 if field not in data:
                     log_debug(f"缺少必要参数: {field}")
-                    return {
-                        "statusCode": 400,
-                        "body": json.dumps({
-                            "error": f"缺少必要参数: {field}",
-                            "trace": f"Missing required field: {field}"
-                        }),
-                        "headers": {
-                            "Content-Type": "application/json",
-                            "Access-Control-Allow-Origin": "*"
-                        }
-                    }
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "error": f"缺少必要参数: {field}",
+                        "trace": f"Missing required field: {field}"
+                    }).encode())
+                    return
             
             # 尝试加载字体文件
             font_paths = [
@@ -391,17 +354,15 @@ def handler(request):
             
             if not font_path:
                 log_debug("未找到字体文件")
-                return {
-                    "statusCode": 500,
-                    "body": json.dumps({
-                        "error": "未找到字体文件",
-                        "trace": "Font file not found"
-                    }),
-                    "headers": {
-                        "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*"
-                    }
-                }
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "error": "未找到字体文件",
+                    "trace": "Font file not found"
+                }).encode())
+                return
             
             # 创建生成器实例
             generator = HandwritingGenerator(
@@ -419,46 +380,29 @@ def handler(request):
             
             # 返回结果
             response = {
-                "statusCode": 200,
-                "body": json.dumps({
-                    "previewBase64": preview_base64,
-                    "gcodeContent": gcode_content
-                }),
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                }
+                "previewBase64": preview_base64,
+                "gcodeContent": gcode_content
             }
             
             log_debug(f"返回响应: {response}")
-            return response
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
             
         except Exception as e:
             log_debug(f"处理请求时发生错误: {str(e)}")
             log_debug(f"错误堆栈: {traceback.format_exc()}")
-            return {
-                "statusCode": 500,
-                "body": json.dumps({
-                    "error": str(e),
-                    "trace": traceback.format_exc()
-                }),
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                }
-            }
-            
-    except Exception as e:
-        log_debug(f"处理请求时发生未捕获的错误: {str(e)}")
-        log_debug(f"错误堆栈: {traceback.format_exc()}")
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "error": "服务器内部错误",
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "error": str(e),
                 "trace": traceback.format_exc()
-            }),
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            }
-        }
+            }).encode())
+
+def handler(request):
+    """Vercel Python Serverless Function处理器"""
+    return Handler(request)
