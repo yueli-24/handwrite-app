@@ -277,6 +277,9 @@ class HandwritingGenerator:
         return image
 
 class Handler(BaseHTTPRequestHandler):
+    def __init__(self, request, client_address, server):
+        super().__init__(request, client_address, server)
+    
     def do_POST(self):
         """处理POST请求"""
         try:
@@ -405,4 +408,4 @@ class Handler(BaseHTTPRequestHandler):
 
 def handler(request):
     """Vercel Python Serverless Function处理器"""
-    return Handler(request)
+    return Handler(request, None, None)
