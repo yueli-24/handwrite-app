@@ -276,6 +276,30 @@ class HandwritingGenerator:
         
         return image
 
+def safe_handler(handler_func):
+    """装饰器：确保handler函数始终返回有效的JSON响应，即使发生未捕获的异常"""
+    @functools.wraps(handler_func)
+    def wrapper(request):
+        try:
+            # 调用原始handler函数
+            return handler_func(request)
+        except Exception as e:
+            # 捕获所有未处理的异常
+            error_message = f"未捕获的异常: {str(e)}"
+            error_trace = traceback.format_exc()
+            
+            # 确保返回有效的JSON响应
+            return {
+                "statusCode": 500,
+                "body": json.dumps({
+                    "error": error_message,
+                    "trace": error_trace
+                }),
+                "headers": {"Content-Type": "application/json"}
+            }
+    return wrapper
+
+@safe_handler
 def handler(request):
     """Vercel Python Serverless Function处理器"""
     try:
