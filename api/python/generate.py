@@ -12,6 +12,8 @@ import numpy as np
 import random
 import math
 import functools
+import cv2
+from skimage.morphology import skeletonize
 from typing import Any, Dict, List, Tuple, Union
 from http.server import BaseHTTPRequestHandler
 
@@ -29,6 +31,131 @@ log_debug(f"当前工作目录: {os.getcwd()}")
 log_debug(f"目录内容: {os.listdir('.')}")
 log_debug(f"Python版本: {sys.version}")
 log_debug(f"Python路径: {sys.path}")
+
+# 集成 StrokeWriter 类
+class StrokeWriter:
+    def __init__(self):
+        # A4レイアウト設定（mm単位）
+        self.page_width = 210
+        self.page_height = 297
+        
+        # A4の中心座標を計算
+        self.center_x = self.page_width / 2  # 105mm
+        self.center_y = self.page_height / 2  # 148.5mm
+        
+        # A4紙に対する絶対余白（mm単位）
+        self.paper_margin_left = 30   # 左余白30mm
+        self.paper_margin_right = 30  # 右余白30mm
+        self.paper_margin_top = 35    # 上余白35mm
+        self.paper_margin_bottom = 25 # 下余白25mm
+        
+        # 文字サイズと間隔の設定（mm単位）
+        self.char_size = 60  # 8mm程度の文字（10倍スケール）
+        # 文字間隔を文字サイズに対する比率で定義
+        self.spacing_ratio_min = 0.06  # 文字サイズの6%
+        self.spacing_ratio_max = 0.12  # 文字サイズの12%
+        self.line_spacing = self.char_size * 1.35  # 文字サイズの1.35倍
+        
+        # ペン設定
+        self.pen_up_z = 0.0      # ペンが上がった位置 (mm)
+        self.pen_down_z = -7.0   # ペンが下がった位置 (mm)
+        self.move_speed = 20000  # 移動速度 (mm/min)
+        self.pen_speed = 20000   # ペンの上下速度 (mm/min)
+        
+        # 実際の書き込み可能領域を計算
+        self.writing_width = self.page_width - (self.paper_margin_left + self.paper_margin_right)
+        self.writing_height = self.page_height - (self.paper_margin_top + self.paper_margin_bottom)
+        
+        # 文字の揺れ設定（mm単位）
+        self.vertical_wobble_min = -2  # 上下の揺れ最小値 -0.2mm（10倍スケール）
+        self.vertical_wobble_max = 2   # 上下の揺れ最大値 0.2mm（10倍スケール）
+        
+        # 改行を防ぐ記号のリスト
+        self.no_break_chars = ['、', '。', '，', '．', '」', '』', '）', '｝', '］',
+                             ',', '.', ')', '}', ']', '!', '?', '！', '？']
+        # 前の文字と離さない記号のリスト
+        self.keep_with_prev_chars = ['」', '』', '）', '｝', '］', ')', '}', ']']
+        
+        print(f"=== Layout Debug ===")
+        print(f"Paper margins (absolute): L={self.paper_margin_left}mm, R={self.paper_margin_right}mm, " 
+              f"T={self.paper_margin_top}mm, B={self.paper_margin_bottom}mm")
+        print(f"Writing area: {self.writing_width}x{self.writing_height}mm")
+
+    def convert_to_center_coordinates(self, x, y):
+        """絶対座標を中心原点の相対座標に変換"""
+        # 左上からの座標を中心からの座標に変換
+        center_relative_x = x - self.center_x
+        center_relative_y = -(y - self.center_y)  # Y軸は上が負
+        return center_relative_x, center_relative_y
+
+    def get_font_strokes(self, char, font_path):
+        """フォントから文字のストロークを抽出"""
+        img_size = (self.char_size * 2, self.char_size * 2)
+        image = Image.new('L', img_size, 255)
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.truetype(font_path, self.char_size)
+        
+        bbox = draw.textbbox((0, 0), char, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        x = (img_size[0] - text_width) // 2
+        y = (img_size[1] - text_height) // 2
+        
+        draw.text((x, y), char, font=font, fill=0)
+        
+        img_array = np.array(image)
+        _, binary = cv2.threshold(img_array, 128, 255, cv2.THRESH_BINARY_INV)
+        skeleton = skeletonize(binary > 0).astype(np.uint8) * 255
+        
+        contours, _ = cv2.findContours(skeleton, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        
+        return contours, (x, y, text_width, text_height)
+
+    def get_random_spacing(self, char_width=None):
+        """文字サイズに比例したランダムな文字間隔を生成"""
+        if char_width is None:
+            char_width = self.char_size/10  # デフォルトサイズ
+        
+        # 文字幅に基づいて間隔を計算
+        min_spacing = char_width * self.spacing_ratio_min * 10  # 10倍スケールに戻す
+        max_spacing = char_width * self.spacing_ratio_max * 10
+        
+        return random.uniform(min_spacing, max_spacing)
+
+    def get_vertical_wobble(self):
+        """ランダムな上下の揺れを生成"""
+        return random.uniform(self.vertical_wobble_min, self.vertical_wobble_max) / 10
+
+    def generate_gcode(self, contour, start_x, start_y, vertical_offset=0, scale=1.0):
+        """輪郭からG-codeを生成（中心原点基準）"""
+        points = contour.reshape(-1, 2)
+        if len(points) < 2:
+            return []
+        
+        stroke_commands = []
+        
+        # 開始点への移動（ペンを上げた状態で）
+        x, y = points[0]
+        abs_x = start_x + x*scale/10
+        abs_y = start_y + y*scale/10 + vertical_offset  # 上下の揺れを追加
+        x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
+        stroke_commands.append(f"G0 X{x_pos:.3f}Y{y_pos:.3f}F{self.move_speed}")
+        
+        # ペンを下ろす
+        stroke_commands.append(f"G1G90 Z{self.pen_down_z}F{self.pen_speed}")
+        
+        # ストロークの描画
+        for point in points[1:]:
+            x, y = point
+            abs_x = start_x + x*scale/10
+            abs_y = start_y + y*scale/10 + vertical_offset  # 上下の揺れを追加
+            x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
+            stroke_commands.append(f"G1 X{x_pos:.3f}Y{y_pos:.3f}F{self.move_speed}")
+        
+        # ペンを上げる
+        stroke_commands.append(f"G1G90 Z{self.pen_up_z}F{self.pen_speed}")
+        
+        return stroke_commands
 
 # 简化版的手写生成器，直接内嵌在API中，避免导入问题
 class HandwritingGenerator:
@@ -104,6 +231,8 @@ class HandwritingGenerator:
         preview_base64 = []
         gcode_content = []
         
+        stroke_writer = StrokeWriter()
+        
         # 处理文本
         lines = text.split('\n')
         for line in lines:
@@ -154,11 +283,15 @@ class HandwritingGenerator:
                         self.y = self.margin_top
                         self.init_gcode()
                 
-                # 添加字符的G代码
-                self.add_char_gcode(char)
+                # 获取字符的轮廓
+                contours, _ = stroke_writer.get_font_strokes(char, self.font_path)
+                for contour in contours:
+                    vertical_offset = stroke_writer.get_vertical_wobble()
+                    gcode_commands = stroke_writer.generate_gcode(contour, self.x, self.y, vertical_offset)
+                    self.gcode.extend(gcode_commands)
                 
                 # 更新位置
-                self.x += self.font_size * (1 + 0.1 * random.random())  # 添加一些随机间距
+                self.x += stroke_writer.get_random_spacing()
             
             # 行尾换行
             self.x = self.margin_left
@@ -249,7 +382,7 @@ class HandwritingGenerator:
         prev_x, prev_y = 0, 0
         
         for line in self.gcode:
-            if line.startswith('G1'):
+            if line.startswith('G1') or line.startswith('G0'):
                 parts = line.split()
                 if len(parts) >= 2:
                     x_val = None
@@ -403,20 +536,12 @@ def handler(request):
         # 处理文本
         gcode_lines, preview_lines = generator.process_text(text)
         
-        # 创建预览图
-        preview_image = generator.create_preview()
-        
-        # 将预览图转换为 base64
-        buffered = BytesIO()
-        preview_image.save(buffered, format="PNG")
-        preview_base64 = base64.b64encode(buffered.getvalue()).decode()
-        
         # 返回结果
         return {
             "statusCode": 200,
             "body": json.dumps({
                 "gcode": gcode_lines,
-                "preview": preview_base64
+                "preview": preview_lines
             }),
             "headers": {
                 "Content-Type": "application/json",
