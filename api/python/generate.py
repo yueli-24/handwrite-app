@@ -356,124 +356,87 @@ def handler(request):
                 }
             
             # 验证必要参数
-            required_params = ['text']
-            missing_params = [param for param in required_params if param not in data]
-            if missing_params:
-                log_debug(f"缺少必要参数: {missing_params}")
-                return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        "error": f"缺少必要参数: {', '.join(missing_params)}",
-                        "trace": "Missing required parameters"
-                    }),
-                    "headers": {
-                        "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*"
+            required_fields = ['text', 'fontSize', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'paperSize']
+            for field in required_fields:
+                if field not in data:
+                    log_debug(f"缺少必要参数: {field}")
+                    return {
+                        "statusCode": 400,
+                        "body": json.dumps({
+                            "error": f"缺少必要参数: {field}",
+                            "trace": f"Missing required field: {field}"
+                        }),
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "Access-Control-Allow-Origin": "*"
+                        }
                     }
-                }
             
-            # 获取参数
-            text = data.get('text', '')
-            font_size = int(data.get('fontSize', 8))
-            margin_top = int(data.get('marginTop', 35))
-            margin_bottom = int(data.get('marginBottom', 25))
-            margin_left = int(data.get('marginLeft', 30))
-            margin_right = int(data.get('marginRight', 30))
-            paper_size = data.get('paperSize', 'A4')
-            
-            # 验证参数
-            if not text.strip():
-                log_debug("文本内容为空")
-                return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        "error": "文本内容不能为空",
-                        "trace": "Empty text content"
-                    }),
-                    "headers": {
-                        "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*"
-                    }
-                }
-            
-            # 尝试查找字体文件
-            font_path = None
-            possible_font_paths = [
-                os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
-                os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
-                os.path.join(os.path.dirname(os.getcwd()), 'public', 'fonts', 'しょかきさらり行体.ttf'),
-                os.path.join('/tmp', 'fonts', 'しょかきさらり行体.ttf'),
-                # Vercel环境中的可能路径
-                '/var/task/public/fonts/しょかきさらり行体.ttf',
-                '/var/task/fonts/しょかきさらり行体.ttf'
+            # 尝试加载字体文件
+            font_paths = [
+                os.path.join(os.getcwd(), 'public', 'fonts', 'NotoSansSC-Regular.ttf'),
+                os.path.join(os.getcwd(), 'fonts', 'NotoSansSC-Regular.ttf'),
+                os.path.join(os.getcwd(), 'NotoSansSC-Regular.ttf'),
+                '/var/task/public/fonts/NotoSansSC-Regular.ttf',
+                '/var/task/fonts/NotoSansSC-Regular.ttf',
+                '/var/task/NotoSansSC-Regular.ttf'
             ]
             
-            for path in possible_font_paths:
-                log_debug(f"检查字体路径: {path}")
+            font_path = None
+            for path in font_paths:
                 if os.path.exists(path):
                     font_path = path
                     log_debug(f"找到字体文件: {path}")
                     break
             
             if not font_path:
-                log_debug("未找到字体文件，将使用默认字体")
-                font_path = ""
-            
-            # 生成预览
-            try:
-                log_debug("开始生成预览")
-                generator = HandwritingGenerator(
-                    font_path=font_path,
-                    font_size=font_size,
-                    margin_top=margin_top,
-                    margin_bottom=margin_bottom,
-                    margin_left=margin_left,
-                    margin_right=margin_right,
-                    paper_size=paper_size
-                )
-                
-                preview_base64, gcode_content = generator.process_text(text)
-                
-                # 构建响应
-                response = {
-                    "success": True,
-                    "sessionId": str(uuid.uuid4()),
-                    "previewBase64": preview_base64,
-                    "gcodeContent": gcode_content
-                }
-                
-                log_debug(f"预览生成成功，页数: {len(preview_base64)}")
-                return {
-                    "statusCode": 200,
-                    "body": json.dumps(response),
-                    "headers": {
-                        "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*"
-                    }
-                }
-                
-            except Exception as e:
-                log_debug(f"生成预览时出错: {str(e)}")
-                log_debug(f"错误堆栈: {traceback.format_exc()}")
+                log_debug("未找到字体文件")
                 return {
                     "statusCode": 500,
                     "body": json.dumps({
-                        "error": f"生成预览失败: {str(e)}",
-                        "trace": traceback.format_exc()
+                        "error": "未找到字体文件",
+                        "trace": "Font file not found"
                     }),
                     "headers": {
                         "Content-Type": "application/json",
                         "Access-Control-Allow-Origin": "*"
                     }
                 }
-                
+            
+            # 创建生成器实例
+            generator = HandwritingGenerator(
+                font_path=font_path,
+                font_size=data['fontSize'],
+                margin_top=data['marginTop'],
+                margin_bottom=data['marginBottom'],
+                margin_left=data['marginLeft'],
+                margin_right=data['marginRight'],
+                paper_size=data['paperSize']
+            )
+            
+            # 处理文本
+            preview_base64, gcode_content = generator.process_text(data['text'])
+            
+            # 返回结果
+            return {
+                "statusCode": 200,
+                "body": json.dumps({
+                    "previewBase64": preview_base64,
+                    "gcodeContent": gcode_content
+                }),
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                }
+            }
+            
         except Exception as e:
-            log_debug(f"处理请求时出错: {str(e)}")
+            log_debug(f"处理请求时发生错误: {str(e)}")
             log_debug(f"错误堆栈: {traceback.format_exc()}")
             return {
                 "statusCode": 500,
                 "body": json.dumps({
-                    "error": f"处理请求失败: {str(e)}",
+                    "error": str(e),
                     "trace": traceback.format_exc()
                 }),
                 "headers": {
@@ -483,12 +446,12 @@ def handler(request):
             }
             
     except Exception as e:
-        log_debug(f"未处理的异常: {str(e)}")
+        log_debug(f"处理请求时发生未捕获的错误: {str(e)}")
         log_debug(f"错误堆栈: {traceback.format_exc()}")
         return {
             "statusCode": 500,
             "body": json.dumps({
-                "error": f"服务器内部错误: {str(e)}",
+                "error": "服务器内部错误",
                 "trace": traceback.format_exc()
             }),
             "headers": {
