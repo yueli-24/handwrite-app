@@ -418,7 +418,7 @@ def handler(request):
             preview_base64, gcode_content = generator.process_text(data['text'])
             
             # 返回结果
-            return {
+            response = {
                 "statusCode": 200,
                 "body": json.dumps({
                     "previewBase64": preview_base64,
@@ -429,6 +429,9 @@ def handler(request):
                     "Access-Control-Allow-Origin": "*"
                 }
             }
+            
+            log_debug(f"返回响应: {response}")
+            return response
             
         except Exception as e:
             log_debug(f"处理请求时发生错误: {str(e)}")

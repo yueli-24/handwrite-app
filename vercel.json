@@ -4,7 +4,16 @@
     { "src": "package.json", "use": "@vercel/next" }
   ],
   "routes": [
-    { "src": "/api/generate", "dest": "/api/python/generate.py" },
+    { 
+      "src": "/api/generate", 
+      "dest": "/api/python/generate.py",
+      "methods": ["POST"],
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST",
+        "Access-Control-Allow-Headers": "Content-Type"
+      }
+    },
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "env": {
