@@ -204,10 +204,10 @@ class StrokeWriter:
         abs_x = start_x + x*scale/10
         abs_y = start_y + y*scale/10 + vertical_offset  # 上下の揺れを追加
         x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
-        stroke_commands.append(f"G0 X{x_pos:.3f}Y{y_pos:.3f}F{self.move_speed}")
+        stroke_commands.append(f"G0 X{x_pos:.3f} Y{y_pos:.3f} F{self.move_speed}")
         
         # ペンを下ろす
-        stroke_commands.append(f"G1G90 Z{self.pen_down_z}F{self.pen_speed}")
+        stroke_commands.append(f"G1 G90 Z{self.pen_down_z} F{self.pen_speed}")
         
         # ストロークの描画
         for point in points[1:]:
@@ -215,10 +215,10 @@ class StrokeWriter:
             abs_x = start_x + x*scale/10
             abs_y = start_y + y*scale/10 + vertical_offset  # 上下の揺れを追加
             x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
-            stroke_commands.append(f"G1 X{x_pos:.3f}Y{y_pos:.3f}F{self.move_speed}")
+            stroke_commands.append(f"G1 X{x_pos:.3f} Y{y_pos:.3f} F{self.move_speed}")
         
         # ペンを上げる
-        stroke_commands.append(f"G1G90 Z{self.pen_up_z}F{self.pen_speed}")
+        stroke_commands.append(f"G1 G90 Z{self.pen_up_z} F{self.pen_speed}")
         
         return stroke_commands
 
@@ -556,10 +556,10 @@ class HandwritingGenerator:
         abs_x = start_x + x*scale/10
         abs_y = start_y + y*scale/10 + vertical_offset  # 上下の揺れを追加
         x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
-        stroke_commands.append(f"G0 X{x_pos:.3f}Y{y_pos:.3f}F{self.move_speed}")
+        stroke_commands.append(f"G0 X{x_pos:.3f} Y{y_pos:.3f} F{self.move_speed}")
         
         # ペンを下ろす
-        stroke_commands.append(f"G1G90 Z{self.pen_down_z}F{self.pen_speed}")
+        stroke_commands.append(f"G1 G90 Z{self.pen_down_z} F{self.pen_speed}")
         
         # ストロークの描画
         for point in points[1:]:
@@ -567,10 +567,10 @@ class HandwritingGenerator:
             abs_x = start_x + x*scale/10
             abs_y = start_y + y*scale/10 + vertical_offset  # 上下の揺れを追加
             x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
-            stroke_commands.append(f"G1 X{x_pos:.3f}Y{y_pos:.3f}F{self.move_speed}")
+            stroke_commands.append(f"G1 X{x_pos:.3f} Y{y_pos:.3f} F{self.move_speed}")
         
         # ペンを上げる
-        stroke_commands.append(f"G1G90 Z{self.pen_up_z}F{self.pen_speed}")
+        stroke_commands.append(f"G1 G90 Z{self.pen_up_z} F{self.pen_speed}")
         
         return stroke_commands
 
