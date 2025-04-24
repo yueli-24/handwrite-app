@@ -247,19 +247,19 @@ class HandwritingGenerator:
         else:
             raise ValueError(f"不支持的纸张规格: {paper_size}")
         
-        # 计算可写区域
-        self.writing_width = self.paper_width - self.margin_left - self.margin_right
-        self.writing_height = self.paper_height - self.margin_top - self.margin_bottom
-        
         # 计算页面中心坐标
-        self.center_x = self.paper_width / 2
-        self.center_y = self.paper_height / 2
+        self.center_x = self.paper_width / 2  # 105mm
+        self.center_y = self.paper_height / 2  # 148.5mm
         
-        # 设置字符大小和间距
-        self.char_size = self.font_size * 10  # 字符大小（10倍缩放）
-        self.spacing_ratio_min = 0.06  # 字符间距最小比例
-        self.spacing_ratio_max = 0.12  # 字符间距最大比例
-        self.line_spacing = self.char_size * 1.35  # 行间距
+        # 计算可写区域
+        self.writing_width = self.paper_width - (self.margin_left + self.margin_right)
+        self.writing_height = self.paper_height - (self.margin_top + self.margin_bottom)
+        
+        # 设置字符大小和间距（10倍缩放）
+        self.char_size = self.font_size * 10  # 8mm程度的字符
+        self.spacing_ratio_min = 0.06  # 字符大小的6%
+        self.spacing_ratio_max = 0.12  # 字符大小的12%
+        self.line_spacing = self.char_size * 1.35  # 字符大小的1.35倍
         
         # 设置笔的参数
         self.pen_up_z = 0.0      # 笔抬起位置 (mm)
@@ -268,8 +268,8 @@ class HandwritingGenerator:
         self.pen_speed = 20000   # 笔的上下速度 (mm/min)
         
         # 设置字符抖动参数
-        self.vertical_wobble_min = -2  # 垂直抖动最小值
-        self.vertical_wobble_max = 2   # 垂直抖动最大值
+        self.vertical_wobble_min = -2  # 垂直抖动最小值 -0.2mm（10倍缩放）
+        self.vertical_wobble_max = 2   # 垂直抖动最大值 0.2mm（10倍缩放）
         
         # 加载字体
         try:
@@ -298,7 +298,13 @@ class HandwritingGenerator:
         # 初始化G代码
         self.gcode = []
         self.init_gcode()
-    
+        
+        # 打印布局调试信息
+        log_debug(f"=== Layout Debug ===")
+        log_debug(f"Paper margins (absolute): L={self.margin_left}mm, R={self.margin_right}mm, "
+                 f"T={self.margin_top}mm, B={self.margin_bottom}mm")
+        log_debug(f"Writing area: {self.writing_width}x{self.writing_height}mm")
+
     def init_gcode(self) -> None:
         """初始化G代码"""
         self.gcode = [
@@ -522,12 +528,19 @@ class HandwritingGenerator:
         
         return contour
 
-    def get_random_spacing(self):
-        """文字サイズに比例したランダムな文字間隔を生成"""
-        return random.uniform(self.spacing_ratio_min * self.char_size, self.spacing_ratio_max * self.char_size)
+    def get_random_spacing(self, char_width=None):
+        """生成与字符大小成比例的随机字符间距"""
+        if char_width is None:
+            char_width = self.char_size/10  # 默认大小
+        
+        # 基于字符宽度计算间距
+        min_spacing = char_width * self.spacing_ratio_min * 10  # 10倍缩放
+        max_spacing = char_width * self.spacing_ratio_max * 10
+        
+        return random.uniform(min_spacing, max_spacing)
 
     def get_vertical_wobble(self):
-        """ランダムな上下の揺れを生成"""
+        """生成随机垂直抖动"""
         return random.uniform(self.vertical_wobble_min, self.vertical_wobble_max) / 10
 
     def generate_gcode(self, contour, start_x, start_y, vertical_offset=0, scale=1.0):
@@ -621,6 +634,7 @@ class HandwritingGenerator:
 
     def convert_to_center_coordinates(self, x, y):
         """将绝对坐标转换为以页面中心为原点的相对坐标"""
+        # 左上角坐标转换为以中心为原点的坐标
         center_relative_x = x - self.center_x
         center_relative_y = -(y - self.center_y)  # Y轴向上为负
         return center_relative_x, center_relative_y
