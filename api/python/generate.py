@@ -251,6 +251,22 @@ class HandwritingGenerator:
         self.writing_width = self.paper_width - self.margin_left - self.margin_right
         self.writing_height = self.paper_height - self.margin_top - self.margin_bottom
         
+        # 设置字符大小和间距
+        self.char_size = self.font_size * 10  # 字符大小（10倍缩放）
+        self.spacing_ratio_min = 0.06  # 字符间距最小比例
+        self.spacing_ratio_max = 0.12  # 字符间距最大比例
+        self.line_spacing = self.char_size * 1.35  # 行间距
+        
+        # 设置笔的参数
+        self.pen_up_z = 0.0      # 笔抬起位置 (mm)
+        self.pen_down_z = -7.0   # 笔落下位置 (mm)
+        self.move_speed = 20000  # 移动速度 (mm/min)
+        self.pen_speed = 20000   # 笔的上下速度 (mm/min)
+        
+        # 设置字符抖动参数
+        self.vertical_wobble_min = -2  # 垂直抖动最小值
+        self.vertical_wobble_max = 2   # 垂直抖动最大值
+        
         # 加载字体
         try:
             if self.font_path and os.path.exists(self.font_path):
