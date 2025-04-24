@@ -224,7 +224,7 @@ class StrokeWriter:
 
 # 简化版的手写生成器，直接内嵌在API中，避免导入问题
 class HandwritingGenerator:
-    def __init__(self, font_path: str, font_size: int = 8, margin_top: int = 35, margin_bottom: int = 25, 
+    def __init__(self, font_path: str = None, font_size: int = 8, margin_top: int = 35, margin_bottom: int = 25, 
                 margin_left: int = 30, margin_right: int = 30, paper_size: str = 'A4'):
         self.font_path = font_path
         self.font_size = font_size
@@ -296,8 +296,6 @@ class HandwritingGenerator:
         preview_base64 = []
         gcode_content = []
         
-        stroke_writer = StrokeWriter()
-        
         # 处理文本
         lines = text.split('\n')
         for line in lines:
@@ -349,14 +347,19 @@ class HandwritingGenerator:
                         self.init_gcode()
                 
                 # 获取字符的轮廓
-                contours, _ = stroke_writer.get_font_strokes(char, self.font_path)
-                for contour in contours:
-                    vertical_offset = stroke_writer.get_vertical_wobble()
-                    gcode_commands = stroke_writer.generate_gcode(contour, self.x, self.y, vertical_offset)
-                    self.gcode.extend(gcode_commands)
+                try:
+                    contours, _ = self.get_font_strokes(char)
+                    for contour in contours:
+                        vertical_offset = self.get_vertical_wobble()
+                        gcode_commands = self.generate_gcode(contour, self.x, self.y, vertical_offset)
+                        self.gcode.extend(gcode_commands)
+                except Exception as e:
+                    log_debug(f"处理字符 '{char}' 时出错: {str(e)}")
+                    # 跳过这个字符，继续处理下一个
+                    continue
                 
                 # 更新位置
-                self.x += stroke_writer.get_random_spacing()
+                self.x += self.get_random_spacing()
             
             # 行尾换行
             self.x = self.margin_left
@@ -395,27 +398,149 @@ class HandwritingGenerator:
             gcode_content.append('\n'.join(self.gcode))
         
         log_debug(f"文本处理完成，生成了 {len(preview_base64)} 页")
-        return preview_base64, gcode_content
+        return gcode_content, preview_base64
     
-    def add_char_gcode(self, char: str) -> None:
-        """为字符添加G代码"""
-        # 简化版本，实际应该根据字体轮廓生成G代码
-        # 这里只是模拟一个简单的写字动作
-        x_jitter = 0.2 * random.random() - 0.1  # -0.1到0.1的随机抖动
-        y_jitter = 0.2 * random.random() - 0.1  # -0.1到0.1的随机抖动
+    def get_font_strokes(self, char: str) -> Tuple[List[np.ndarray], Tuple[int, int, int, int]]:
+        """使用Pillow替代scikit-image"""
+        img_size = (self.char_size*2, self.char_size*2)
+        image = Image.new('L', img_size, 255)
+        draw = ImageDraw.Draw(image)
         
-        self.gcode.append(f"G1 Z5 F1000 ; 抬起笔")
-        self.gcode.append(f"G1 X{self.x + x_jitter} Y{self.y + y_jitter} F3000 ; 移动到字符位置")
-        self.gcode.append(f"G1 Z0 F1000 ; 放下笔")
+        try:
+            # 尝试使用加载的字体
+            bbox = draw.textbbox((0,0), char, font=self.font)
+        except Exception as e:
+            log_debug(f"使用字体绘制字符失败: {str(e)}")
+            # 使用默认字体
+            bbox = draw.textbbox((0,0), char)
         
-        # 模拟写字的几个点
-        for i in range(5):
-            x_offset = (i / 4) * self.font_size * 0.8
-            y_offset = math.sin(i * math.pi / 2) * self.font_size * 0.3
-            self.gcode.append(f"G1 X{self.x + x_offset + x_jitter} Y{self.y + y_offset + y_jitter} F1000 ; 写字")
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        x = (img_size[0] - text_width) // 2
+        y = (img_size[1] - text_height) // 2
         
-        self.gcode.append(f"G1 Z5 F1000 ; 抬起笔")
-    
+        try:
+            # 尝试使用加载的字体
+            draw.text((x,y), char, font=self.font, fill=0)
+        except Exception as e:
+            log_debug(f"使用字体绘制字符失败: {str(e)}")
+            # 使用默认字体
+            draw.text((x,y), char, fill=0)
+        
+        # 使用Pillow和numpy处理图像
+        img_array = np.array(image)
+        # 二值化
+        binary = img_array < 128
+        # 骨架化（简化版）
+        skeleton = self.skeletonize(binary)
+        # 轮廓提取
+        contours = self.find_contours(skeleton)
+        
+        return contours, (x,y,text_width,text_height)
+
+    def skeletonize(self, binary):
+        """简化版的骨架化算法"""
+        skeleton = binary.copy()
+        while True:
+            eroded = self.erode(skeleton)
+            if np.all(eroded == 0):
+                break
+            skeleton = eroded
+        return skeleton
+
+    def erode(self, img):
+        """简化版的腐蚀操作"""
+        kernel = np.ones((3,3), dtype=np.uint8)
+        eroded = np.zeros_like(img)
+        for i in range(1, img.shape[0]-1):
+            for j in range(1, img.shape[1]-1):
+                if img[i,j] and np.all(img[i-1:i+2, j-1:j+2] * kernel):
+                    eroded[i,j] = 1
+        return eroded
+
+    def find_contours(self, binary):
+        """简化版的轮廓提取"""
+        contours = []
+        visited = np.zeros_like(binary, dtype=bool)
+        
+        for i in range(binary.shape[0]):
+            for j in range(binary.shape[1]):
+                if binary[i,j] and not visited[i,j]:
+                    contour = self.trace_contour(binary, visited, i, j)
+                    if len(contour) > 2:
+                        contours.append(np.array(contour))
+        
+        return contours
+
+    def trace_contour(self, binary, visited, start_i, start_j):
+        """追踪单个轮廓"""
+        contour = []
+        i, j = start_i, start_j
+        directions = [(0,1), (1,1), (1,0), (1,-1), (0,-1), (-1,-1), (-1,0), (-1,1)]
+        dir_idx = 0
+        
+        while True:
+            if visited[i,j]:
+                break
+            visited[i,j] = True
+            contour.append([j,i])  # 注意坐标顺序
+            
+            # 寻找下一个点
+            found = False
+            for _ in range(8):
+                di, dj = directions[dir_idx]
+                ni, nj = i + di, j + dj
+                if 0 <= ni < binary.shape[0] and 0 <= nj < binary.shape[1]:
+                    if binary[ni,nj] and not visited[ni,nj]:
+                        i, j = ni, nj
+                        found = True
+                        break
+                dir_idx = (dir_idx + 1) % 8
+            
+            if not found:
+                break
+        
+        return contour
+
+    def get_random_spacing(self):
+        """文字サイズに比例したランダムな文字間隔を生成"""
+        return random.uniform(self.spacing_ratio_min * self.char_size, self.spacing_ratio_max * self.char_size)
+
+    def get_vertical_wobble(self):
+        """ランダムな上下の揺れを生成"""
+        return random.uniform(self.vertical_wobble_min, self.vertical_wobble_max) / 10
+
+    def generate_gcode(self, contour, start_x, start_y, vertical_offset=0, scale=1.0):
+        """輪郭からG-codeを生成（中心原点基準）"""
+        points = np.array(contour)
+        if len(points) < 2:
+            return []
+        
+        stroke_commands = []
+        
+        # 開始点への移動（ペンを上げた状態で）
+        x, y = points[0]
+        abs_x = start_x + x*scale/10
+        abs_y = start_y + y*scale/10 + vertical_offset  # 上下の揺れを追加
+        x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
+        stroke_commands.append(f"G0 X{x_pos:.3f}Y{y_pos:.3f}F{self.move_speed}")
+        
+        # ペンを下ろす
+        stroke_commands.append(f"G1G90 Z{self.pen_down_z}F{self.pen_speed}")
+        
+        # ストロークの描画
+        for point in points[1:]:
+            x, y = point
+            abs_x = start_x + x*scale/10
+            abs_y = start_y + y*scale/10 + vertical_offset  # 上下の揺れを追加
+            x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
+            stroke_commands.append(f"G1 X{x_pos:.3f}Y{y_pos:.3f}F{self.move_speed}")
+        
+        # ペンを上げる
+        stroke_commands.append(f"G1G90 Z{self.pen_up_z}F{self.pen_speed}")
+        
+        return stroke_commands
+
     def create_preview(self) -> Image.Image:
         """创建预览图像"""
         # 创建空白图像
@@ -541,12 +666,12 @@ class Handler(BaseHTTPRequestHandler):
             # 创建生成器实例
             try:
                 font_paths = [
-                    os.path.join(os.getcwd(), 'public', 'fonts', 'NotoSansSC-Regular.otf'),
-                    os.path.join(os.getcwd(), 'fonts', 'NotoSansSC-Regular.otf'),
-                    os.path.join(os.getcwd(), 'NotoSansSC-Regular.otf'),
-                    '/var/task/public/fonts/NotoSansSC-Regular.otf',
-                    '/var/task/fonts/NotoSansSC-Regular.otf',
-                    '/var/task/NotoSansSC-Regular.otf'
+                    os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
+                    os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
+                    os.path.join(os.getcwd(), 'しょかきさらり行体.ttf'),
+                    '/var/task/public/fonts/しょかきさらり行体.ttf',
+                    '/var/task/fonts/しょかきさらり行体.ttf',
+                    '/var/task/しょかきさらり行体.ttf'
                 ]
                 
                 font_path = None
