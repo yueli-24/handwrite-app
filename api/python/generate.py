@@ -9,11 +9,14 @@ import uuid
 import traceback
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
+from skimage.morphology import skeletonize
+from skimage.measure import find_contours  # 替代cv2.findContours
+from skimage.filters import threshold_otsu  # 替代cv2.threshold
+
 import random
 import math
 import functools
 import cv2
-from skimage.morphology import skeletonize
 from typing import Any, Dict, List, Tuple, Union
 from http.server import BaseHTTPRequestHandler
 
@@ -88,28 +91,35 @@ class StrokeWriter:
         center_relative_y = -(y - self.center_y)  # Y軸は上が負
         return center_relative_x, center_relative_y
 
+    # 修改原get_font_strokes方法
     def get_font_strokes(self, char, font_path):
-        """フォントから文字のストロークを抽出"""
-        img_size = (self.char_size * 2, self.char_size * 2)
+        """使用Pillow+scikit-image替代OpenCV"""
+        img_size = (self.char_size*2, self.char_size*2)
         image = Image.new('L', img_size, 255)
         draw = ImageDraw.Draw(image)
         font = ImageFont.truetype(font_path, self.char_size)
         
-        bbox = draw.textbbox((0, 0), char, font=font)
+        bbox = draw.textbbox((0,0), char, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
         x = (img_size[0] - text_width) // 2
         y = (img_size[1] - text_height) // 2
         
-        draw.text((x, y), char, font=font, fill=0)
+        draw.text((x,y), char, font=font, fill=0)
         
+        # 替代cv2图像处理流程
         img_array = np.array(image)
-        _, binary = cv2.threshold(img_array, 128, 255, cv2.THRESH_BINARY_INV)
-        skeleton = skeletonize(binary > 0).astype(np.uint8) * 255
+        thresh = threshold_otsu(img_array)
+        binary = img_array > thresh
+        skeleton = skeletonize(binary)
+        contours = find_contours(skeleton, 0.5)
         
-        contours, _ = cv2.findContours(skeleton, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-        
-        return contours, (x, y, text_width, text_height)
+        # 格式转换（适配原接口）
+        formatted_contours = [
+            np.fliplr(c).reshape(-1,1,2).astype(int) 
+            for c in contours
+        ]
+        return formatted_contours, (x,y,text_width,text_height)
 
     def get_random_spacing(self, char_width=None):
         """文字サイズに比例したランダムな文字間隔を生成"""
