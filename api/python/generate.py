@@ -497,134 +497,127 @@ def safe_handler(handler_func):
             }
     return wrapper
 
-@safe_handler
-def handler(request):
-    """Vercel Python Serverless Function处理器"""
-    try:
-        # 记录详细的环境信息，帮助调试
-        log_debug("===== 开始处理请求 =====")
-        log_debug(f"当前工作目录: {os.getcwd()}")
-        log_debug(f"目录内容: {os.listdir('.')}")
-        log_debug(f"Python版本: {sys.version}")
-        log_debug(f"Python路径: {sys.path}")
-        
-        # 获取请求方法
-        request_method = getattr(request, 'method', 'UNKNOWN')
-        log_debug(f"请求方法: {request_method}")
-        
-        # 检查请求方法
-        if request_method != 'POST':
-            log_debug("错误: 仅支持POST请求")
-            return {
-                "statusCode": 405,
-                "body": json.dumps({
-                    "error": "仅支持POST请求",
-                    "trace": "Method not allowed"
-                }),
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                }
-            }
-        
-        # 获取请求体
-        body = None
-        if hasattr(request, 'body'):
-            body = request.body
-            log_debug(f"通过request.body获取到请求体，类型: {type(body)}")
-        elif hasattr(request, 'read') and callable(request.read):
-            body = request.read()
-            log_debug(f"通过request.read()获取到请求体，类型: {type(body)}")
-        elif hasattr(request, 'json') and callable(request.json):
-            body = request.json()
-            log_debug(f"通过request.json()获取到请求体，类型: {type(body)}")
-        
-        if not body:
-            log_debug("无法获取请求体")
-            return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    "error": "无法获取请求体",
-                    "trace": "No request body found"
-                }),
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                }
-            }
-        
-        # 解析JSON
+class Handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        """处理 POST 请求"""
         try:
-            if isinstance(body, str):
-                data = json.loads(body)
-            elif isinstance(body, bytes):
-                data = json.loads(body.decode('utf-8'))
-            else:
-                data = body
-            log_debug(f"解析后的数据: {data}")
-        except json.JSONDecodeError as e:
-            log_debug(f"JSON解析错误: {str(e)}")
-            return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    "error": "无效的JSON格式",
+            # 记录详细的环境信息，帮助调试
+            log_debug("===== 开始处理请求 =====")
+            log_debug(f"当前工作目录: {os.getcwd()}")
+            log_debug(f"目录内容: {os.listdir('.')}")
+            log_debug(f"Python版本: {sys.version}")
+            log_debug(f"Python路径: {sys.path}")
+            
+            # 获取请求体
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data)
+                log_debug(f"请求数据: {data}")
+            except (KeyError, ValueError) as e:
+                log_debug(f"请求体解析错误: {str(e)}")
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "error": "无效的请求格式",
                     "trace": str(e)
-                }),
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                }
-            }
-        
-        # 验证必要参数
-        text = data.get('text', '')
-        if not text:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({
+                }).encode())
+                return
+            
+            # 验证必要参数
+            text = data.get('text', '')
+            if not text:
+                log_debug("错误: 文本内容为空")
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
                     "error": "文本内容不能为空",
                     "trace": "Empty text"
-                }),
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*"
-                }
-            }
-        
-        # 创建生成器实例
-        generator = HandwritingGenerator(
-            font_path='fonts/NotoSansSC-Regular.otf',
-            font_size=8,
-            paper_size='A4'
-        )
-        
-        # 处理文本
-        gcode_lines, preview_lines = generator.process_text(text)
-        
-        # 返回结果
-        return {
-            "statusCode": 200,
-            "body": json.dumps({
-                "gcode": gcode_lines,
-                "preview": preview_lines
-            }),
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            }
-        }
-        
-    except Exception as e:
-        log_debug(f"处理请求时出错: {str(e)}")
-        log_debug(traceback.format_exc())
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "error": str(e),
-                "trace": traceback.format_exc()
-            }),
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            }
-        }
+                }).encode())
+                return
+            
+            # 创建生成器实例
+            try:
+                font_paths = [
+                    os.path.join(os.getcwd(), 'public', 'fonts', 'NotoSansSC-Regular.otf'),
+                    os.path.join(os.getcwd(), 'fonts', 'NotoSansSC-Regular.otf'),
+                    os.path.join(os.getcwd(), 'NotoSansSC-Regular.otf'),
+                    '/var/task/public/fonts/NotoSansSC-Regular.otf',
+                    '/var/task/fonts/NotoSansSC-Regular.otf',
+                    '/var/task/NotoSansSC-Regular.otf'
+                ]
+                
+                font_path = None
+                for path in font_paths:
+                    if os.path.exists(path):
+                        font_path = path
+                        log_debug(f"找到字体文件: {path}")
+                        break
+                
+                if not font_path:
+                    log_debug("未找到字体文件，使用默认字体")
+                    font_path = None  # 使用默认字体
+                
+                generator = HandwritingGenerator(
+                    font_path=font_path,
+                    font_size=8,
+                    paper_size='A4'
+                )
+            except Exception as e:
+                log_debug(f"生成器初始化错误: {str(e)}")
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "error": "生成器初始化失败",
+                    "trace": str(e)
+                }).encode())
+                return
+            
+            # 处理文本
+            try:
+                gcode_lines, preview_lines = generator.process_text(text)
+                log_debug(f"处理完成，生成 {len(gcode_lines)} 行 G 代码")
+            except Exception as e:
+                log_debug(f"文本处理错误: {str(e)}")
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "error": "文本处理失败",
+                    "trace": str(e)
+                }).encode())
+                return
+            
+            # 发送响应
+            try:
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "gcode": gcode_lines,
+                    "preview": preview_lines
+                }).encode())
+                log_debug("响应发送成功")
+            except Exception as e:
+                log_debug(f"响应发送错误: {str(e)}")
+                # 这里不能发送新的响应，因为已经发送了响应头
+            
+        except Exception as e:
+            log_debug(f"处理请求时出错: {str(e)}")
+            log_debug(traceback.format_exc())
+            try:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "error": str(e),
+                    "trace": traceback.format_exc()
+                }).encode())
+            except:
+                pass  # 如果响应已经发送，忽略错误
+
+# 导出处理程序
+handler = Handler
