@@ -251,6 +251,10 @@ class HandwritingGenerator:
         self.writing_width = self.paper_width - self.margin_left - self.margin_right
         self.writing_height = self.paper_height - self.margin_top - self.margin_bottom
         
+        # 计算页面中心坐标
+        self.center_x = self.paper_width / 2
+        self.center_y = self.paper_height / 2
+        
         # 设置字符大小和间距
         self.char_size = self.font_size * 10  # 字符大小（10倍缩放）
         self.spacing_ratio_min = 0.06  # 字符间距最小比例
@@ -614,6 +618,12 @@ class HandwritingGenerator:
                         prev_x, prev_y = x_px, y_px
         
         return image
+
+    def convert_to_center_coordinates(self, x, y):
+        """将绝对坐标转换为以页面中心为原点的相对坐标"""
+        center_relative_x = x - self.center_x
+        center_relative_y = -(y - self.center_y)  # Y轴向上为负
+        return center_relative_x, center_relative_y
 
 def safe_handler(handler_func):
     """装饰器：确保handler函数始终返回有效的JSON响应，即使发生未捕获的异常"""
