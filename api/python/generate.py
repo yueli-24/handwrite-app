@@ -9,14 +9,9 @@ import uuid
 import traceback
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
-from skimage.morphology import skeletonize
-from skimage.measure import find_contours  # 替代cv2.findContours
-from skimage.filters import threshold_otsu  # 替代cv2.threshold
-
 import random
 import math
 import functools
-import cv2
 from typing import Any, Dict, List, Tuple, Union
 from http.server import BaseHTTPRequestHandler
 
@@ -91,9 +86,8 @@ class StrokeWriter:
         center_relative_y = -(y - self.center_y)  # Y軸は上が負
         return center_relative_x, center_relative_y
 
-    # 修改原get_font_strokes方法
     def get_font_strokes(self, char, font_path):
-        """使用Pillow+scikit-image替代OpenCV"""
+        """使用Pillow替代scikit-image"""
         img_size = (self.char_size*2, self.char_size*2)
         image = Image.new('L', img_size, 255)
         draw = ImageDraw.Draw(image)
@@ -107,19 +101,80 @@ class StrokeWriter:
         
         draw.text((x,y), char, font=font, fill=0)
         
-        # 替代cv2图像处理流程
+        # 使用Pillow和numpy处理图像
         img_array = np.array(image)
-        thresh = threshold_otsu(img_array)
-        binary = img_array > thresh
-        skeleton = skeletonize(binary)
-        contours = find_contours(skeleton, 0.5)
+        # 二值化
+        binary = img_array < 128
+        # 骨架化（简化版）
+        skeleton = self.skeletonize(binary)
+        # 轮廓提取
+        contours = self.find_contours(skeleton)
         
-        # 格式转换（适配原接口）
-        formatted_contours = [
-            np.fliplr(c).reshape(-1,1,2).astype(int) 
-            for c in contours
-        ]
-        return formatted_contours, (x,y,text_width,text_height)
+        return contours, (x,y,text_width,text_height)
+
+    def skeletonize(self, binary):
+        """简化版的骨架化算法"""
+        skeleton = binary.copy()
+        while True:
+            eroded = self.erode(skeleton)
+            if np.all(eroded == 0):
+                break
+            skeleton = eroded
+        return skeleton
+
+    def erode(self, img):
+        """简化版的腐蚀操作"""
+        kernel = np.ones((3,3), dtype=np.uint8)
+        eroded = np.zeros_like(img)
+        for i in range(1, img.shape[0]-1):
+            for j in range(1, img.shape[1]-1):
+                if img[i,j] and np.all(img[i-1:i+2, j-1:j+2] * kernel):
+                    eroded[i,j] = 1
+        return eroded
+
+    def find_contours(self, binary):
+        """简化版的轮廓提取"""
+        contours = []
+        visited = np.zeros_like(binary, dtype=bool)
+        
+        for i in range(binary.shape[0]):
+            for j in range(binary.shape[1]):
+                if binary[i,j] and not visited[i,j]:
+                    contour = self.trace_contour(binary, visited, i, j)
+                    if len(contour) > 2:
+                        contours.append(np.array(contour))
+        
+        return contours
+
+    def trace_contour(self, binary, visited, start_i, start_j):
+        """追踪单个轮廓"""
+        contour = []
+        i, j = start_i, start_j
+        directions = [(0,1), (1,1), (1,0), (1,-1), (0,-1), (-1,-1), (-1,0), (-1,1)]
+        dir_idx = 0
+        
+        while True:
+            if visited[i,j]:
+                break
+            visited[i,j] = True
+            contour.append([j,i])  # 注意坐标顺序
+            
+            # 寻找下一个点
+            found = False
+            for _ in range(8):
+                di, dj = directions[dir_idx]
+                ni, nj = i + di, j + dj
+                if 0 <= ni < binary.shape[0] and 0 <= nj < binary.shape[1]:
+                    if binary[ni,nj] and not visited[ni,nj]:
+                        i, j = ni, nj
+                        found = True
+                        break
+                dir_idx = (dir_idx + 1) % 8
+            
+            if not found:
+                break
+        
+        return contour
 
     def get_random_spacing(self, char_width=None):
         """文字サイズに比例したランダムな文字間隔を生成"""
@@ -138,7 +193,7 @@ class StrokeWriter:
 
     def generate_gcode(self, contour, start_x, start_y, vertical_offset=0, scale=1.0):
         """輪郭からG-codeを生成（中心原点基準）"""
-        points = contour.reshape(-1, 2)
+        points = np.array(contour)
         if len(points) < 2:
             return []
         
