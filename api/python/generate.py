@@ -727,8 +727,12 @@ class Handler(BaseHTTPRequestHandler):
                 
                 generator = HandwritingGenerator(
                     font_path=font_path,
-                    font_size=8,
-                    paper_size='A4'
+                    font_size=data.get('fontSize', 8),
+                    margin_top=data.get('marginTop', 35),
+                    margin_bottom=data.get('marginBottom', 25),
+                    margin_left=data.get('marginLeft', 30),
+                    margin_right=data.get('marginRight', 30),
+                    paper_size=data.get('paperSize', 'A4')
                 )
             except Exception as e:
                 log_debug(f"生成器初始化错误: {str(e)}")
