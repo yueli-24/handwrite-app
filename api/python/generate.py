@@ -319,7 +319,6 @@ class HandwritingGenerator:
         """处理文本，生成G代码和预览图像"""
         try:
             log_debug("开始处理文本")
-            # 直接在内存中处理，避免文件系统操作
             preview_base64 = []
             gcode_content = []
             
@@ -329,12 +328,10 @@ class HandwritingGenerator:
                 if not line.strip():  # 空行
                     self.y += self.line_height
                     if self.y + self.line_height > self.margin_top + self.writing_height:
-                        # 创建预览图像
                         try:
                             preview_img = self.create_preview()
-                            # 直接转换为base64
                             buffered = BytesIO()
-                            preview_img.save(buffered, format="PNG")
+                            preview_img.save(buffered, format="PNG", optimize=True)
                             img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                             preview_base64.append(img_str)
                             log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -342,10 +339,7 @@ class HandwritingGenerator:
                             log_debug(f"生成预览图像时出错: {str(e)}")
                             raise
                         
-                        # 保存G代码
                         gcode_content.append('\n'.join(self.gcode))
-                        
-                        # 准备新页面
                         self.page_count += 1
                         self.x = self.margin_left
                         self.y = self.margin_top
@@ -354,19 +348,15 @@ class HandwritingGenerator:
                 
                 # 处理一行文字
                 for char in line:
-                    # 检查是否需要换行
                     if self.x + self.font_size > self.margin_left + self.writing_width:
                         self.x = self.margin_left
                         self.y += self.line_height
                         
-                        # 检查是否需要新页面
                         if self.y + self.line_height > self.margin_top + self.writing_height:
-                            # 创建预览图像
                             try:
                                 preview_img = self.create_preview()
-                                # 直接转换为base64
                                 buffered = BytesIO()
-                                preview_img.save(buffered, format="PNG")
+                                preview_img.save(buffered, format="PNG", optimize=True)
                                 img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                                 preview_base64.append(img_str)
                                 log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -374,16 +364,12 @@ class HandwritingGenerator:
                                 log_debug(f"生成预览图像时出错: {str(e)}")
                                 raise
                             
-                            # 保存G代码
                             gcode_content.append('\n'.join(self.gcode))
-                            
-                            # 准备新页面
                             self.page_count += 1
                             self.x = self.margin_left
                             self.y = self.margin_top
                             self.init_gcode()
                     
-                    # 获取字符的轮廓
                     try:
                         contours, _ = self.get_font_strokes(char)
                         for contour in contours:
@@ -392,24 +378,18 @@ class HandwritingGenerator:
                             self.gcode.extend(gcode_commands)
                     except Exception as e:
                         log_debug(f"处理字符 '{char}' 时出错: {str(e)}")
-                        # 跳过这个字符，继续处理下一个
                         continue
                     
-                    # 更新位置
                     self.x += self.get_random_spacing()
                 
-                # 行尾换行
                 self.x = self.margin_left
                 self.y += self.line_height
                 
-                # 检查是否需要新页面
                 if self.y + self.line_height > self.margin_top + self.writing_height:
-                    # 创建预览图像
                     try:
                         preview_img = self.create_preview()
-                        # 直接转换为base64
                         buffered = BytesIO()
-                        preview_img.save(buffered, format="PNG")
+                        preview_img.save(buffered, format="PNG", optimize=True)
                         img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                         preview_base64.append(img_str)
                         log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -417,23 +397,17 @@ class HandwritingGenerator:
                         log_debug(f"生成预览图像时出错: {str(e)}")
                         raise
                     
-                    # 保存G代码
                     gcode_content.append('\n'.join(self.gcode))
-                    
-                    # 准备新页面
                     self.page_count += 1
                     self.x = self.margin_left
                     self.y = self.margin_top
                     self.init_gcode()
             
-            # 处理最后一页
             if self.gcode and self.gcode[-1] != "G1 Z5 F1000 ; 抬起笔":
-                # 创建预览图像
                 try:
                     preview_img = self.create_preview()
-                    # 直接转换为base64
                     buffered = BytesIO()
-                    preview_img.save(buffered, format="PNG")
+                    preview_img.save(buffered, format="PNG", optimize=True)
                     img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                     preview_base64.append(img_str)
                     log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -441,7 +415,6 @@ class HandwritingGenerator:
                     log_debug(f"生成预览图像时出错: {str(e)}")
                     raise
                 
-                # 保存G代码
                 gcode_content.append('\n'.join(self.gcode))
             
             log_debug(f"文本处理完成，生成了 {len(preview_base64)} 页")
@@ -601,33 +574,34 @@ class HandwritingGenerator:
     def create_preview(self) -> Image.Image:
         """创建预览图像"""
         try:
-            # 创建空白图像
-            dpi = 72  # 300 DPI / 25.4 mm
+            # 降低DPI以减小图像大小
+            dpi = 36  # 降低到150 DPI / 25.4 mm
             width_px = int(self.paper_width * dpi / 25.4)
             height_px = int(self.paper_height * dpi / 25.4)
             
             log_debug(f"创建预览图像: {width_px}x{height_px} 像素")
             
-            # 白地の画像を作成
+            # 创建白色背景图像
             image = Image.new('RGB', (width_px, height_px), 'white')
             draw = ImageDraw.Draw(image)
             
-            # 余白の計算（ピクセル単位）
+            # 计算边距（像素单位）
             margin_top_px = int(self.margin_top * dpi / 25.4)
             margin_right_px = int(self.margin_right * dpi / 25.4)
             margin_left_px = int(self.margin_left * dpi / 25.4)
             margin_bottom_px = int(self.margin_bottom * dpi / 25.4)
             
-            # 余白エリアを描画（薄いグレー）
+            # 绘制边距区域（浅灰色）
             draw.rectangle([0, 0, width_px, margin_top_px], fill=(240, 240, 240))
             draw.rectangle([0, height_px - margin_bottom_px, width_px, height_px], fill=(240, 240, 240))
             draw.rectangle([0, 0, margin_left_px, height_px], fill=(240, 240, 240))
             draw.rectangle([width_px - margin_right_px, 0, width_px, height_px], fill=(240, 240, 240))
             
-            # 解析G代码并绘制
+            # 优化G代码解析和绘制
             x, y = 0, 0
             pen_down = False
             prev_x, prev_y = 0, 0
+            points = []
             
             for line in self.gcode:
                 if line.startswith('G1') or line.startswith('G0'):
@@ -642,18 +616,23 @@ class HandwritingGenerator:
                                 y_val = float(part[1:])
                             elif part.startswith('Z'):
                                 z_val = float(part[1:])
-                                pen_down = z_val < 2.5  # 如果Z值小于2.5，认为笔是放下的
+                                pen_down = z_val < 2.5
                         
                         if x_val is not None and y_val is not None:
                             # 转换坐标到像素
                             x_px = int(x_val * dpi / 25.4)
                             y_px = int(y_val * dpi / 25.4)
                             
-                            if pen_down and prev_x is not None and prev_y is not None:
-                                # 绘制线条
-                                draw.line([(prev_x, prev_y), (x_px, y_px)], fill='black', width=1)
-                            
-                            prev_x, prev_y = x_px, y_px
+                            if pen_down:
+                                points.append((x_px, y_px))
+                            else:
+                                if len(points) > 1:
+                                    draw.line(points, fill='black', width=1)
+                                points = [(x_px, y_px)]
+            
+            # 绘制最后一条线
+            if len(points) > 1:
+                draw.line(points, fill='black', width=1)
             
             log_debug("预览图像生成完成")
             return image
