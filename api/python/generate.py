@@ -709,11 +709,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(400)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps({
+                response = {
                     "status": "error",
-                    "error": "无效的请求格式",
-                    "message": str(e)
-                }).encode())
+                    "error": "invalid_request",
+                    "message": "无效的请求格式"
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
                 return
             
             # 验证必要参数
@@ -723,11 +724,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(400)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps({
+                response = {
                     "status": "error",
-                    "error": "文本内容不能为空",
-                    "message": "Empty text"
-                }).encode())
+                    "error": "empty_text",
+                    "message": "文本内容不能为空"
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
                 return
             
             # 创建生成器实例
@@ -766,11 +768,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps({
+                response = {
                     "status": "error",
-                    "error": "生成器初始化失败",
-                    "message": str(e)
-                }).encode())
+                    "error": "generator_init_failed",
+                    "message": "生成器初始化失败"
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
                 return
             
             # 处理文本
@@ -782,11 +785,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps({
+                response = {
                     "status": "error",
-                    "error": "文本处理失败",
-                    "message": str(e)
-                }).encode())
+                    "error": "text_processing_failed",
+                    "message": "文本处理失败"
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
                 return
             
             # 发送响应
@@ -794,15 +798,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                response_data = {
+                response = {
                     "status": "success",
                     "data": {
                         "gcode": gcode_lines,
                         "preview": preview_lines
                     }
                 }
-                log_debug(f"发送响应: {json.dumps(response_data)[:100]}...")
-                self.wfile.write(json.dumps(response_data).encode())
+                log_debug(f"发送响应: {json.dumps(response)[:100]}...")
+                self.wfile.write(json.dumps(response).encode('utf-8'))
                 log_debug("响应发送成功")
             except Exception as e:
                 log_debug(f"响应发送错误: {str(e)}")
@@ -815,11 +819,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps({
+                response = {
                     "status": "error",
-                    "error": "服务器内部错误",
-                    "message": str(e)
-                }).encode())
+                    "error": "internal_server_error",
+                    "message": "服务器内部错误"
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
             except:
                 pass  # 如果响应已经发送，忽略错误
 
