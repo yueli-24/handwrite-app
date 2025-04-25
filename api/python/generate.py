@@ -335,8 +335,9 @@ class HandwritingGenerator:
                             # 直接转换为base64
                             buffered = BytesIO()
                             preview_img.save(buffered, format="PNG")
-                            img_str = base64.b64encode(buffered.getvalue()).decode()
+                            img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                             preview_base64.append(img_str)
+                            log_debug(f"预览图像编码完成，长度: {len(img_str)}")
                         except Exception as e:
                             log_debug(f"生成预览图像时出错: {str(e)}")
                             raise
@@ -366,8 +367,9 @@ class HandwritingGenerator:
                                 # 直接转换为base64
                                 buffered = BytesIO()
                                 preview_img.save(buffered, format="PNG")
-                                img_str = base64.b64encode(buffered.getvalue()).decode()
+                                img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                                 preview_base64.append(img_str)
+                                log_debug(f"预览图像编码完成，长度: {len(img_str)}")
                             except Exception as e:
                                 log_debug(f"生成预览图像时出错: {str(e)}")
                                 raise
@@ -408,8 +410,9 @@ class HandwritingGenerator:
                         # 直接转换为base64
                         buffered = BytesIO()
                         preview_img.save(buffered, format="PNG")
-                        img_str = base64.b64encode(buffered.getvalue()).decode()
+                        img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                         preview_base64.append(img_str)
+                        log_debug(f"预览图像编码完成，长度: {len(img_str)}")
                     except Exception as e:
                         log_debug(f"生成预览图像时出错: {str(e)}")
                         raise
@@ -431,8 +434,9 @@ class HandwritingGenerator:
                     # 直接转换为base64
                     buffered = BytesIO()
                     preview_img.save(buffered, format="PNG")
-                    img_str = base64.b64encode(buffered.getvalue()).decode()
+                    img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                     preview_base64.append(img_str)
+                    log_debug(f"预览图像编码完成，长度: {len(img_str)}")
                 except Exception as e:
                     log_debug(f"生成预览图像时出错: {str(e)}")
                     raise
