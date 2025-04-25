@@ -790,10 +790,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps({
+                response_data = {
                     "gcode": gcode_lines,
                     "preview": preview_lines
-                }).encode())
+                }
+                log_debug(f"发送响应: {json.dumps(response_data)[:100]}...")
+                self.wfile.write(json.dumps(response_data).encode())
                 log_debug("响应发送成功")
             except Exception as e:
                 log_debug(f"响应发送错误: {str(e)}")
