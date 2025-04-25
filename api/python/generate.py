@@ -710,8 +710,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
+                    "status": "error",
                     "error": "无效的请求格式",
-                    "trace": str(e)
+                    "message": str(e)
                 }).encode())
                 return
             
@@ -723,8 +724,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
+                    "status": "error",
                     "error": "文本内容不能为空",
-                    "trace": "Empty text"
+                    "message": "Empty text"
                 }).encode())
                 return
             
@@ -765,8 +767,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
+                    "status": "error",
                     "error": "生成器初始化失败",
-                    "trace": str(e)
+                    "message": str(e)
                 }).encode())
                 return
             
@@ -780,8 +783,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
+                    "status": "error",
                     "error": "文本处理失败",
-                    "trace": str(e)
+                    "message": str(e)
                 }).encode())
                 return
             
@@ -791,8 +795,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 response_data = {
-                    "gcode": gcode_lines,
-                    "preview": preview_lines
+                    "status": "success",
+                    "data": {
+                        "gcode": gcode_lines,
+                        "preview": preview_lines
+                    }
                 }
                 log_debug(f"发送响应: {json.dumps(response_data)[:100]}...")
                 self.wfile.write(json.dumps(response_data).encode())
@@ -809,8 +816,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
-                    "error": str(e),
-                    "trace": traceback.format_exc()
+                    "status": "error",
+                    "error": "服务器内部错误",
+                    "message": str(e)
                 }).encode())
             except:
                 pass  # 如果响应已经发送，忽略错误
