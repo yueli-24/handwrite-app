@@ -331,7 +331,7 @@ class HandwritingGenerator:
                         try:
                             preview_img = self.create_preview()
                             buffered = BytesIO()
-                            preview_img.save(buffered, format="PNG", optimize=True)
+                            preview_img.save(buffered, format="PNG", optimize=True, quality=85)
                             img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                             preview_base64.append(img_str)
                             log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -356,7 +356,7 @@ class HandwritingGenerator:
                             try:
                                 preview_img = self.create_preview()
                                 buffered = BytesIO()
-                                preview_img.save(buffered, format="PNG", optimize=True)
+                                preview_img.save(buffered, format="PNG", optimize=True, quality=85)
                                 img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                                 preview_base64.append(img_str)
                                 log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -389,7 +389,7 @@ class HandwritingGenerator:
                     try:
                         preview_img = self.create_preview()
                         buffered = BytesIO()
-                        preview_img.save(buffered, format="PNG", optimize=True)
+                        preview_img.save(buffered, format="PNG", optimize=True, quality=85)
                         img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                         preview_base64.append(img_str)
                         log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -407,7 +407,7 @@ class HandwritingGenerator:
                 try:
                     preview_img = self.create_preview()
                     buffered = BytesIO()
-                    preview_img.save(buffered, format="PNG", optimize=True)
+                    preview_img.save(buffered, format="PNG", optimize=True, quality=85)
                     img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                     preview_base64.append(img_str)
                     log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -574,8 +574,8 @@ class HandwritingGenerator:
     def create_preview(self) -> Image.Image:
         """创建预览图像"""
         try:
-            # 降低DPI以减小图像大小
-            dpi = 36  # 降低到150 DPI / 25.4 mm
+            # 进一步降低DPI以减小图像大小
+            dpi = 18  # 降低到75 DPI / 25.4 mm
             width_px = int(self.paper_width * dpi / 25.4)
             height_px = int(self.paper_height * dpi / 25.4)
             
@@ -598,10 +598,8 @@ class HandwritingGenerator:
             draw.rectangle([width_px - margin_right_px, 0, width_px, height_px], fill=(240, 240, 240))
             
             # 优化G代码解析和绘制
-            x, y = 0, 0
-            pen_down = False
-            prev_x, prev_y = 0, 0
             points = []
+            pen_down = False
             
             for line in self.gcode:
                 if line.startswith('G1') or line.startswith('G0'):
