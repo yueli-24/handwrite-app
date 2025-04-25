@@ -315,8 +315,8 @@ class HandwritingGenerator:
             f"G1 X{self.margin_left} Y{self.margin_top} F3000 ; 移动到起始位置"
         ]
     
-    def process_text(self, text: str) -> Tuple[List[str], List[str]]:
-        """处理文本，生成G代码和预览图像"""
+    def process_text(self, text: str, max_pages: int = 3) -> Tuple[List[str], List[str]]:
+        """处理文本，生成G代码和预览图像，限制最大页数"""
         try:
             log_debug("开始处理文本")
             preview_base64 = []
@@ -325,13 +325,17 @@ class HandwritingGenerator:
             # 处理文本
             lines = text.split('\n')
             for line in lines:
+                if len(preview_base64) >= max_pages:
+                    log_debug(f"达到最大页数限制: {max_pages}")
+                    break
+                
                 if not line.strip():  # 空行
                     self.y += self.line_height
                     if self.y + self.line_height > self.margin_top + self.writing_height:
                         try:
-                            preview_img = self.create_preview()
+                            preview_img = self.create_preview(max_pages)
                             buffered = BytesIO()
-                            preview_img.save(buffered, format="PNG", optimize=True, quality=85)
+                            preview_img.save(buffered, format="PNG", optimize=True, quality=75)
                             img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                             preview_base64.append(img_str)
                             log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -348,15 +352,18 @@ class HandwritingGenerator:
                 
                 # 处理一行文字
                 for char in line:
+                    if len(preview_base64) >= max_pages:
+                        break
+                    
                     if self.x + self.font_size > self.margin_left + self.writing_width:
                         self.x = self.margin_left
                         self.y += self.line_height
                         
                         if self.y + self.line_height > self.margin_top + self.writing_height:
                             try:
-                                preview_img = self.create_preview()
+                                preview_img = self.create_preview(max_pages)
                                 buffered = BytesIO()
-                                preview_img.save(buffered, format="PNG", optimize=True, quality=85)
+                                preview_img.save(buffered, format="PNG", optimize=True, quality=75)
                                 img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                                 preview_base64.append(img_str)
                                 log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -382,14 +389,17 @@ class HandwritingGenerator:
                     
                     self.x += self.get_random_spacing()
                 
+                if len(preview_base64) >= max_pages:
+                    break
+                
                 self.x = self.margin_left
                 self.y += self.line_height
                 
                 if self.y + self.line_height > self.margin_top + self.writing_height:
                     try:
-                        preview_img = self.create_preview()
+                        preview_img = self.create_preview(max_pages)
                         buffered = BytesIO()
-                        preview_img.save(buffered, format="PNG", optimize=True, quality=85)
+                        preview_img.save(buffered, format="PNG", optimize=True, quality=75)
                         img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                         preview_base64.append(img_str)
                         log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -403,11 +413,11 @@ class HandwritingGenerator:
                     self.y = self.margin_top
                     self.init_gcode()
             
-            if self.gcode and self.gcode[-1] != "G1 Z5 F1000 ; 抬起笔":
+            if len(preview_base64) < max_pages and self.gcode and self.gcode[-1] != "G1 Z5 F1000 ; 抬起笔":
                 try:
-                    preview_img = self.create_preview()
+                    preview_img = self.create_preview(max_pages)
                     buffered = BytesIO()
-                    preview_img.save(buffered, format="PNG", optimize=True, quality=85)
+                    preview_img.save(buffered, format="PNG", optimize=True, quality=75)
                     img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                     preview_base64.append(img_str)
                     log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -571,11 +581,11 @@ class HandwritingGenerator:
         
         return stroke_commands
 
-    def create_preview(self) -> Image.Image:
-        """创建预览图像"""
+    def create_preview(self, max_pages: int = 3) -> Image.Image:
+        """创建预览图像，限制最大页数"""
         try:
             # 进一步降低DPI以减小图像大小
-            dpi = 18  # 降低到75 DPI / 25.4 mm
+            dpi = 12  # 降低到50 DPI / 25.4 mm
             width_px = int(self.paper_width * dpi / 25.4)
             height_px = int(self.paper_height * dpi / 25.4)
             
@@ -601,7 +611,14 @@ class HandwritingGenerator:
             points = []
             pen_down = False
             
+            # 限制处理的G代码行数
+            max_lines = 1000
+            processed_lines = 0
+            
             for line in self.gcode:
+                if processed_lines >= max_lines:
+                    break
+                
                 if line.startswith('G1') or line.startswith('G0'):
                     parts = line.split()
                     if len(parts) >= 2:
@@ -627,6 +644,8 @@ class HandwritingGenerator:
                                 if len(points) > 1:
                                     draw.line(points, fill='black', width=1)
                                 points = [(x_px, y_px)]
+            
+                processed_lines += 1
             
             # 绘制最后一条线
             if len(points) > 1:
