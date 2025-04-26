@@ -598,9 +598,9 @@ class HandwritingGenerator:
 
     def convert_to_center_coordinates(self, x, y):
         """将绝对坐标转换为以页面中心为原点的相对坐标"""
-        # 左上角坐标转换为以中心为原点的坐标
+        # 计算相对于左上角的坐标
         center_relative_x = x - self.center_x
-        center_relative_y = -(y - self.center_y)  # Y轴向上为负
+        center_relative_y = self.center_y - y  # Y轴向上为正
         return center_relative_x, center_relative_y
 
     def generate_gcode(self, contour, start_x, start_y, vertical_offset=0, scale=1.0):
@@ -613,8 +613,9 @@ class HandwritingGenerator:
         
         # 移动到起始点（笔抬起状态）
         x, y = points[0]
-        abs_x = start_x + x*scale/10
-        abs_y = start_y + y*scale/10 + vertical_offset  # 添加垂直抖动
+        # 移除scale/10的缩放，因为contour已经是正确的大小
+        abs_x = start_x + x
+        abs_y = start_y + y + vertical_offset
         x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
         stroke_commands.append(f"G0 X{x_pos:.3f} Y{y_pos:.3f} F{self.move_speed}")
         
@@ -624,8 +625,8 @@ class HandwritingGenerator:
         # 绘制笔画
         for point in points[1:]:
             x, y = point
-            abs_x = start_x + x*scale/10
-            abs_y = start_y + y*scale/10 + vertical_offset  # 添加垂直抖动
+            abs_x = start_x + x
+            abs_y = start_y + y + vertical_offset
             x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
             stroke_commands.append(f"G1 X{x_pos:.3f} Y{y_pos:.3f} F{self.move_speed}")
         
