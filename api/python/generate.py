@@ -226,7 +226,7 @@ class HandwritingGenerator:
     def __init__(self, font_path: str = None, font_size: int = 8, margin_top: int = 35, margin_bottom: int = 25, 
                 margin_left: int = 30, margin_right: int = 30, paper_size: str = 'A4'):
         self.font_path = font_path
-        self.font_size = font_size
+        self.font_size = min(max(font_size, 6), 12)  # 限制字体大小在6-12之间
         self.margin_top = margin_top
         self.margin_bottom = margin_bottom
         self.margin_left = margin_left
@@ -247,42 +247,40 @@ class HandwritingGenerator:
             raise ValueError(f"不支持的纸张规格: {paper_size}")
         
         # 计算页面中心坐标
-        self.center_x = self.paper_width / 2  # 105mm
-        self.center_y = self.paper_height / 2  # 148.5mm
+        self.center_x = self.paper_width / 2
+        self.center_y = self.paper_height / 2
         
         # 计算可写区域
         self.writing_width = self.paper_width - (self.margin_left + self.margin_right)
         self.writing_height = self.paper_height - (self.margin_top + self.margin_bottom)
         
         # 设置字符大小和间距（10倍缩放）
-        self.char_size = self.font_size * 10  # 8mm程度的字符
-        self.spacing_ratio_min = 0.06  # 字符大小的6%
-        self.spacing_ratio_max = 0.12  # 字符大小的12%
-        self.line_spacing = self.char_size * 1.35  # 字符大小的1.35倍
+        self.char_size = self.font_size * 10  # 字体大小乘以10
+        self.spacing_ratio_min = 0.06
+        self.spacing_ratio_max = 0.12
+        self.line_spacing = self.char_size * 1.35
         
         # 设置笔的参数
-        self.pen_up_z = 0.0      # 笔抬起位置 (mm)
-        self.pen_down_z = -7.0   # 笔落下位置 (mm)
-        self.move_speed = 20000  # 移动速度 (mm/min)
-        self.pen_speed = 20000   # 笔的上下速度 (mm/min)
+        self.pen_up_z = 0.0
+        self.pen_down_z = -7.0
+        self.move_speed = 20000
+        self.pen_speed = 20000
         
         # 设置字符抖动参数
-        self.vertical_wobble_min = -2  # 垂直抖动最小值 -0.2mm（10倍缩放）
-        self.vertical_wobble_max = 2   # 垂直抖动最大值 0.2mm（10倍缩放）
+        self.vertical_wobble_min = -2
+        self.vertical_wobble_max = 2
         
         # 加载字体
         try:
             if self.font_path and os.path.exists(self.font_path):
                 log_debug(f"尝试加载字体: {self.font_path}")
-                self.font = ImageFont.truetype(self.font_path, int(self.font_size * 10))
+                self.font = ImageFont.truetype(self.font_path, int(self.char_size))
                 log_debug("字体加载成功")
             else:
-                # 直接使用默认字体
                 log_debug("使用默认字体")
                 self.font = ImageFont.load_default()
         except Exception as e:
             log_debug(f"字体加载失败: {str(e)}")
-            # 使用默认字体作为备选
             self.font = ImageFont.load_default()
             log_debug("已加载默认字体")
         
@@ -653,7 +651,6 @@ class HandwritingGenerator:
 # Vercel Serverless Function 处理函数
 def handler(request):
     try:
-        # 记录详细的环境信息，帮助调试
         log_debug("===== 开始处理请求 =====")
         log_debug(f"当前工作目录: {os.getcwd()}")
         log_debug(f"目录内容: {os.listdir('.')}")
@@ -675,9 +672,10 @@ def handler(request):
                 "body": json.dumps({
                     "status": "error",
                     "error": "invalid_request",
-                    "message": "无效的请求格式"
+                    "message": "无效的请求格式",
+                    "trace": str(e)
                 }),
-                "headers": {"Content-Type": "application/json"}
+                "headers": {"Content-Type": "application/json; charset=utf-8"}
             }
         
         # 验证必要参数
@@ -691,7 +689,7 @@ def handler(request):
                     "error": "empty_text",
                     "message": "文本内容不能为空"
                 }),
-                "headers": {"Content-Type": "application/json"}
+                "headers": {"Content-Type": "application/json; charset=utf-8"}
             }
         
         # 创建生成器实例
@@ -714,7 +712,7 @@ def handler(request):
             
             if not font_path:
                 log_debug("未找到字体文件，使用默认字体")
-                font_path = None  # 使用默认字体
+                font_path = None
             
             generator = HandwritingGenerator(
                 font_path=font_path,
@@ -735,7 +733,7 @@ def handler(request):
                     "message": "生成器初始化失败",
                     "trace": traceback.format_exc()
                 }),
-                "headers": {"Content-Type": "application/json"}
+                "headers": {"Content-Type": "application/json; charset=utf-8"}
             }
         
         # 处理文本
@@ -752,7 +750,7 @@ def handler(request):
                     "previewBase64": result.get("previewBase64", []),
                     "gcodeContent": result.get("gcodeContent", [])
                 }),
-                "headers": {"Content-Type": "application/json"}
+                "headers": {"Content-Type": "application/json; charset=utf-8"}
             }
         except Exception as e:
             log_debug(f"文本处理错误: {str(e)}")
@@ -764,7 +762,7 @@ def handler(request):
                     "message": "文本处理失败",
                     "trace": traceback.format_exc()
                 }),
-                "headers": {"Content-Type": "application/json"}
+                "headers": {"Content-Type": "application/json; charset=utf-8"}
             }
     except Exception as e:
         log_debug(f"处理请求时出错: {str(e)}")
@@ -777,5 +775,5 @@ def handler(request):
                 "message": "服务器内部错误",
                 "trace": traceback.format_exc()
             }),
-            "headers": {"Content-Type": "application/json"}
+            "headers": {"Content-Type": "application/json; charset=utf-8"}
         }
