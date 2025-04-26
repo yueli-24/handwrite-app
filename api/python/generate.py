@@ -7,7 +7,7 @@ import tempfile
 import shutil
 import uuid
 import traceback
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import numpy as np
 import random
 import math
@@ -509,8 +509,8 @@ class HandwritingGenerator:
     def create_preview(self, max_pages: int = 3) -> Image.Image:
         """创建预览图像，限制最大页数"""
         try:
-            # 进一步降低DPI以减小图像大小
-            dpi = 12  # 降低到12 DPI
+            # 提高DPI以提高清晰度
+            dpi = 72  # 提高到72 DPI
             width_px = int(self.paper_width * dpi / 25.4)
             height_px = int(self.paper_height * dpi / 25.4)
             
@@ -536,8 +536,8 @@ class HandwritingGenerator:
             points = []
             pen_down = False
             
-            # 限制处理的G代码行数
-            max_lines = 1000
+            # 增加处理的G代码行数限制
+            max_lines = 5000
             processed_lines = 0
             
             for line in self.gcode:
@@ -549,6 +549,7 @@ class HandwritingGenerator:
                     if len(parts) >= 2:
                         x_val = None
                         y_val = None
+                        z_val = None
                         for part in parts[1:]:
                             if part.startswith('X'):
                                 x_val = float(part[1:])
@@ -560,21 +561,25 @@ class HandwritingGenerator:
                         
                         if x_val is not None and y_val is not None:
                             # 转换坐标到像素
-                            x_px = int(x_val * dpi / 25.4)
-                            y_px = int(y_val * dpi / 25.4)
+                            x_px = int((x_val + self.center_x) * dpi / 25.4)
+                            y_px = int((self.center_y - y_val) * dpi / 25.4)
                             
                             if pen_down:
                                 points.append((x_px, y_px))
                             else:
                                 if len(points) > 1:
-                                    draw.line(points, fill='black', width=1)
+                                    # 使用更粗的线条和抗锯齿
+                                    draw.line(points, fill='black', width=2, joint="curve")
                                 points = [(x_px, y_px)]
             
                 processed_lines += 1
             
             # 绘制最后一条线
             if len(points) > 1:
-                draw.line(points, fill='black', width=1)
+                draw.line(points, fill='black', width=2, joint="curve")
+            
+            # 应用锐化滤镜提高清晰度
+            image = image.filter(ImageFilter.SHARPEN)
             
             log_debug("预览图像生成完成")
             return image
