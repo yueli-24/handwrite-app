@@ -706,8 +706,11 @@ def handler(request):
                     "error": "invalid_request",
                     "message": "无效的请求格式",
                     "trace": str(e)
-                }),
-                "headers": {"Content-Type": "application/json; charset=utf-8"}
+                }, ensure_ascii=False),
+                "headers": {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Access-Control-Allow-Origin": "*"
+                }
             }
         
         # 验证必要参数
@@ -720,8 +723,11 @@ def handler(request):
                     "status": "error",
                     "error": "empty_text",
                     "message": "文本内容不能为空"
-                }),
-                "headers": {"Content-Type": "application/json; charset=utf-8"}
+                }, ensure_ascii=False),
+                "headers": {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Access-Control-Allow-Origin": "*"
+                }
             }
         
         # 创建生成器实例
@@ -764,8 +770,11 @@ def handler(request):
                     "error": "generator_init_failed",
                     "message": "生成器初始化失败",
                     "trace": traceback.format_exc()
-                }),
-                "headers": {"Content-Type": "application/json; charset=utf-8"}
+                }, ensure_ascii=False),
+                "headers": {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Access-Control-Allow-Origin": "*"
+                }
             }
         
         # 处理文本
@@ -775,15 +784,20 @@ def handler(request):
                 raise Exception(result.get("error", "未知错误"))
             
             # 返回响应
-            return {
+            response = {
                 "statusCode": 200,
                 "body": json.dumps({
                     "status": "success",
                     "previewBase64": result.get("previewBase64", []),
                     "gcodeContent": result.get("gcodeContent", [])
-                }),
-                "headers": {"Content-Type": "application/json; charset=utf-8"}
+                }, ensure_ascii=False),
+                "headers": {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Access-Control-Allow-Origin": "*"
+                }
             }
+            log_debug(f"返回响应: {response}")
+            return response
         except Exception as e:
             log_debug(f"文本处理错误: {str(e)}")
             return {
@@ -793,8 +807,11 @@ def handler(request):
                     "error": "text_processing_failed",
                     "message": "文本处理失败",
                     "trace": traceback.format_exc()
-                }),
-                "headers": {"Content-Type": "application/json; charset=utf-8"}
+                }, ensure_ascii=False),
+                "headers": {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Access-Control-Allow-Origin": "*"
+                }
             }
     except Exception as e:
         log_debug(f"处理请求时出错: {str(e)}")
@@ -806,6 +823,9 @@ def handler(request):
                 "error": "internal_server_error",
                 "message": "服务器内部错误",
                 "trace": traceback.format_exc()
-            }),
-            "headers": {"Content-Type": "application/json; charset=utf-8"}
+            }, ensure_ascii=False),
+            "headers": {
+                "Content-Type": "application/json; charset=utf-8",
+                "Access-Control-Allow-Origin": "*"
+            }
         }
