@@ -822,8 +822,9 @@ class Handler(BaseHTTPRequestHandler):
                         "preview": preview_lines
                     }
                 }
-                log_debug(f"发送响应: {json.dumps(response)[:100]}...")
-                self.wfile.write(json.dumps(response).encode('utf-8'))
+                response_str = json.dumps(response)
+                log_debug(f"发送响应: {response_str[:100]}...")
+                self.wfile.write(response_str.encode('utf-8'))
                 log_debug("响应发送成功")
             except Exception as e:
                 log_debug(f"响应发送错误: {str(e)}")
