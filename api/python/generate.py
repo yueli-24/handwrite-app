@@ -677,175 +677,121 @@ class HandwritingGenerator:
         center_relative_y = -(y - self.center_y)  # Y轴向上为负
         return center_relative_x, center_relative_y
 
-def safe_handler(handler_func):
-    """装饰器：确保handler函数始终返回有效的JSON响应，即使发生未捕获的异常"""
-    @functools.wraps(handler_func)
-    def wrapper(request):
+def safe_response(func):
+    """装饰器：确保所有响应都是有效的JSON格式"""
+    def wrapper(*args, **kwargs):
         try:
-            # 调用原始handler函数
-            return handler_func(request)
+            return func(*args, **kwargs)
         except Exception as e:
-            # 捕获所有未处理的异常
-            error_message = f"未捕获的异常: {str(e)}"
-            error_trace = traceback.format_exc()
-            
-            # 确保返回有效的JSON响应
+            log_debug(f"处理错误: {str(e)}")
             return {
-                "statusCode": 500,
-                "body": json.dumps({
-                    "error": error_message,
-                    "trace": error_trace
-                }),
-                "headers": {"Content-Type": "application/json"}
+                "status": "error",
+                "error": "internal_error",
+                "message": str(e)
             }
     return wrapper
 
 class Handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        """处理 POST 请求"""
+    def send_json_response(self, data, status=200):
+        """统一发送JSON响应"""
         try:
-            # 记录详细的环境信息，帮助调试
-            log_debug("===== 开始处理请求 =====")
-            log_debug(f"当前工作目录: {os.getcwd()}")
-            log_debug(f"目录内容: {os.listdir('.')}")
-            log_debug(f"Python版本: {sys.version}")
-            log_debug(f"Python路径: {sys.path}")
-            
-            # 获取请求体
-            try:
-                content_length = int(self.headers['Content-Length'])
-                post_data = self.rfile.read(content_length)
-                data = json.loads(post_data)
-                log_debug(f"请求数据: {data}")
-            except (KeyError, ValueError) as e:
-                log_debug(f"请求体解析错误: {str(e)}")
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {
-                    "status": "error",
-                    "error": "invalid_request",
-                    "message": "无效的请求格式"
-                }
-                self.wfile.write(json.dumps(response).encode('utf-8'))
-                return
-            
-            # 验证必要参数
-            text = data.get('text', '')
-            if not text:
-                log_debug("错误: 文本内容为空")
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {
-                    "status": "error",
-                    "error": "empty_text",
-                    "message": "文本内容不能为空"
-                }
-                self.wfile.write(json.dumps(response).encode('utf-8'))
-                return
-            
-            # 创建生成器实例
-            try:
-                font_paths = [
-                    os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
-                    os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
-                    os.path.join(os.getcwd(), 'しょかきさらり行体.ttf'),
-                    '/var/task/public/fonts/しょかきさらり行体.ttf',
-                    '/var/task/fonts/しょかきさらり行体.ttf',
-                    '/var/task/しょかきさらり行体.ttf'
-                ]
-                
-                font_path = None
-                for path in font_paths:
-                    if os.path.exists(path):
-                        font_path = path
-                        log_debug(f"找到字体文件: {path}")
-                        break
-                
-                if not font_path:
-                    log_debug("未找到字体文件，使用默认字体")
-                    font_path = None  # 使用默认字体
-                
-                generator = HandwritingGenerator(
-                    font_path=font_path,
-                    font_size=data.get('fontSize', 8),
-                    margin_top=data.get('marginTop', 35),
-                    margin_bottom=data.get('marginBottom', 25),
-                    margin_left=data.get('marginLeft', 30),
-                    margin_right=data.get('marginRight', 30),
-                    paper_size=data.get('paperSize', 'A4')
-                )
-            except Exception as e:
-                log_debug(f"生成器初始化错误: {str(e)}")
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {
-                    "status": "error",
-                    "error": "generator_init_failed",
-                    "message": "生成器初始化失败"
-                }
-                self.wfile.write(json.dumps(response).encode('utf-8'))
-                return
-            
-            # 处理文本
-            try:
-                result = generator.process_text(text)
-                if not result.get("success", False):
-                    raise Exception(result.get("error", "未知错误"))
-                
-                gcode_lines = result.get("gcode", [])
-                preview_lines = result.get("previews", [])
-                log_debug(f"处理完成，生成 {len(gcode_lines)} 行 G 代码")
-            except Exception as e:
-                log_debug(f"文本处理错误: {str(e)}")
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {
-                    "status": "error",
-                    "error": "text_processing_failed",
-                    "message": "文本处理失败"
-                }
-                self.wfile.write(json.dumps(response).encode('utf-8'))
-                return
-            
-            # 发送响应
-            try:
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {
-                    "status": "success",
-                    "data": {
-                        "gcode": gcode_lines,
-                        "preview": preview_lines
-                    }
-                }
-                response_str = json.dumps(response, ensure_ascii=False)
-                log_debug(f"发送响应: {response_str[:100]}...")
-                self.wfile.write(response_str.encode('utf-8'))
-                log_debug("响应发送成功")
-            except Exception as e:
-                log_debug(f"响应发送错误: {str(e)}")
-                # 这里不能发送新的响应，因为已经发送了响应头
-            
+            self.send_response(status)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response_str = json.dumps(data, ensure_ascii=False)
+            self.wfile.write(response_str.encode('utf-8'))
+            log_debug(f"发送响应: {response_str[:100]}...")
         except Exception as e:
-            log_debug(f"处理请求时出错: {str(e)}")
-            log_debug(traceback.format_exc())
-            try:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {
-                    "status": "error",
-                    "error": "internal_server_error",
-                    "message": "服务器内部错误"
+            log_debug(f"发送响应失败: {str(e)}")
+
+    @safe_response
+    def do_POST(self):
+        """处理POST请求"""
+        log_debug("===== 开始处理请求 =====")
+        
+        # 解析请求数据
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data)
+            log_debug(f"请求数据: {data}")
+        except Exception as e:
+            return self.send_json_response({
+                "status": "error",
+                "error": "invalid_request",
+                "message": "无效的请求格式"
+            }, 400)
+
+        # 验证必要参数
+        text = data.get('text', '')
+        if not text:
+            return self.send_json_response({
+                "status": "error",
+                "error": "empty_text",
+                "message": "文本内容不能为空"
+            }, 400)
+
+        # 初始化生成器
+        try:
+            generator = self._init_generator(data)
+        except Exception as e:
+            return self.send_json_response({
+                "status": "error",
+                "error": "init_failed",
+                "message": "生成器初始化失败"
+            }, 500)
+
+        # 处理文本
+        try:
+            result = generator.process_text(text)
+            if not result.get("success", False):
+                raise Exception(result.get("error", "处理失败"))
+            
+            return self.send_json_response({
+                "status": "success",
+                "data": {
+                    "gcode": result.get("gcode", []),
+                    "preview": result.get("previews", [])
                 }
-                self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
-            except:
-                pass  # 如果响应已经发送，忽略错误
+            })
+        except Exception as e:
+            return self.send_json_response({
+                "status": "error",
+                "error": "process_failed",
+                "message": "文本处理失败"
+            }, 500)
+
+    def _init_generator(self, data):
+        """初始化生成器"""
+        font_path = self._find_font()
+        return HandwritingGenerator(
+            font_path=font_path,
+            font_size=data.get('fontSize', 8),
+            margin_top=data.get('marginTop', 35),
+            margin_bottom=data.get('marginBottom', 25),
+            margin_left=data.get('marginLeft', 30),
+            margin_right=data.get('marginRight', 30),
+            paper_size=data.get('paperSize', 'A4')
+        )
+
+    def _find_font(self):
+        """查找字体文件"""
+        font_paths = [
+            os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
+            os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
+            os.path.join(os.getcwd(), 'しょかきさらり行体.ttf'),
+            '/var/task/public/fonts/しょかきさらり行体.ttf',
+            '/var/task/fonts/しょかきさらり行体.ttf',
+            '/var/task/しょかきさらり行体.ttf'
+        ]
+        
+        for path in font_paths:
+            if os.path.exists(path):
+                log_debug(f"找到字体文件: {path}")
+                return path
+        
+        log_debug("未找到字体文件，使用默认字体")
+        return None
 
 # 导出处理程序
 handler = Handler
