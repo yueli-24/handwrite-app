@@ -620,6 +620,21 @@ class HandwritingGenerator:
         
         return stroke_commands
 
+    def get_random_spacing(self, char_width=None):
+        """生成与字符大小成比例的随机字符间距"""
+        if char_width is None:
+            char_width = self.font_size/10  # 默认大小
+        
+        # 基于字符宽度计算间距
+        min_spacing = char_width * self.spacing_ratio_min * 10  # 10倍缩放
+        max_spacing = char_width * self.spacing_ratio_max * 10
+        
+        return random.uniform(min_spacing, max_spacing)
+
+    def get_vertical_wobble(self):
+        """生成随机垂直抖动"""
+        return random.uniform(self.vertical_wobble_min, self.vertical_wobble_max) / 10
+
 # Vercel Serverless Function 处理函数
 def handler(request):
     try:
