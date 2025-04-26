@@ -530,23 +530,16 @@ class HandwritingGenerator:
             draw.rectangle([0, 0, margin_left_px, height_px], fill=(240, 240, 240))
             draw.rectangle([width_px - margin_right_px, 0, width_px, height_px], fill=(240, 240, 240))
             
-            # 优化G代码解析和绘制
-            points = []
-            pen_down = False
-            
-            # 增加处理的G代码行数限制
-            max_lines = 5000
-            processed_lines = 0
-            
             # 计算缩放比例和偏移
             scale = dpi / 25.4  # 毫米到像素的转换比例
             offset_x = self.center_x * scale
             offset_y = self.center_y * scale
             
+            # 绘制机器人运动路径（蓝色）
+            points = []
+            pen_down = False
+            
             for line in self.gcode:
-                if processed_lines >= max_lines:
-                    break
-                
                 if line.startswith('G1') or line.startswith('G0'):
                     parts = line.split()
                     if len(parts) >= 2:
@@ -575,11 +568,50 @@ class HandwritingGenerator:
                                 points.append((x_px, y_px))
                             else:
                                 if len(points) > 1:
-                                    # 使用更粗的线条和抗锯齿
-                                    draw.line(points, fill='black', width=2, joint="curve")
+                                    # 使用蓝色绘制机器人运动路径
+                                    draw.line(points, fill=(0, 0, 255), width=1, joint="curve")
                                 points = [(x_px, y_px)]
             
-                processed_lines += 1
+            # 绘制最后一条线
+            if len(points) > 1:
+                draw.line(points, fill=(0, 0, 255), width=1, joint="curve")
+            
+            # 绘制实际书写内容（黑色）
+            points = []
+            pen_down = False
+            
+            for line in self.gcode:
+                if line.startswith('G1') or line.startswith('G0'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        x_val = None
+                        y_val = None
+                        z_val = None
+                        for part in parts[1:]:
+                            if part.startswith('X'):
+                                x_val = float(part[1:])
+                            elif part.startswith('Y'):
+                                y_val = float(part[1:])
+                            elif part.startswith('Z'):
+                                z_val = float(part[1:])
+                                pen_down = z_val < 2.5
+                        
+                        if x_val is not None and y_val is not None:
+                            # 转换坐标到像素，考虑中心偏移
+                            x_px = int(x_val * scale + offset_x)
+                            y_px = int(-y_val * scale + offset_y)  # Y轴反转
+                            
+                            # 确保坐标在图像范围内
+                            x_px = max(0, min(x_px, width_px - 1))
+                            y_px = max(0, min(y_px, height_px - 1))
+                            
+                            if pen_down:
+                                points.append((x_px, y_px))
+                            else:
+                                if len(points) > 1:
+                                    # 使用黑色绘制实际书写内容
+                                    draw.line(points, fill='black', width=2, joint="curve")
+                                points = [(x_px, y_px)]
             
             # 绘制最后一条线
             if len(points) > 1:
