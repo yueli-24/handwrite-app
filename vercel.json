@@ -10,7 +10,8 @@
       "src": "api/python/*.py", 
       "use": "@vercel/python",
       "config": {
-        "installCommand": "pip install -r requirements.txt"
+        "installCommand": "pip install -r requirements.txt",
+        "pythonVersion": "3.9"
       }
     },
     { "src": "package.json", "use": "@vercel/next" }
@@ -19,19 +20,13 @@
     { 
       "src": "/api/generate", 
       "dest": "/api/python/generate.py",
-      "methods": ["POST"],
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST",
-        "Access-Control-Allow-Headers": "Content-Type"
-      }
+      "methods": ["POST"]
     },
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "env": {
     "PYTHON_ENABLED": "true",
     "PYTHONPATH": "/var/task",
-    "PYTHONUNBUFFERED": "1",
-    "PYTHON_VERSION": "3.12"
+    "PYTHONUNBUFFERED": "1"
   }
 }
