@@ -697,14 +697,15 @@ def handler(request):
                     data = json.loads(body)
                 except json.JSONDecodeError as e:
                     log_debug(f"JSON解析错误: {str(e)}")
+                    error_response = {
+                        "status": "error",
+                        "error": "invalid_json",
+                        "message": "无效的JSON格式",
+                        "trace": str(e)
+                    }
                     return {
                         "statusCode": 400,
-                        "body": json.dumps({
-                            "status": "error",
-                            "error": "invalid_json",
-                            "message": "无效的JSON格式",
-                            "trace": str(e)
-                        }, ensure_ascii=False),
+                        "body": json.dumps(error_response, ensure_ascii=False),
                         "headers": {
                             "Content-Type": "application/json; charset=utf-8",
                             "Access-Control-Allow-Origin": "*"
@@ -715,14 +716,15 @@ def handler(request):
             log_debug(f"请求数据: {data}")
         except Exception as e:
             log_debug(f"请求体解析错误: {str(e)}")
+            error_response = {
+                "status": "error",
+                "error": "invalid_request",
+                "message": "无效的请求格式",
+                "trace": str(e)
+            }
             return {
                 "statusCode": 400,
-                "body": json.dumps({
-                    "status": "error",
-                    "error": "invalid_request",
-                    "message": "无效的请求格式",
-                    "trace": str(e)
-                }, ensure_ascii=False),
+                "body": json.dumps(error_response, ensure_ascii=False),
                 "headers": {
                     "Content-Type": "application/json; charset=utf-8",
                     "Access-Control-Allow-Origin": "*"
@@ -733,13 +735,14 @@ def handler(request):
         text = data.get('text', '')
         if not text:
             log_debug("错误: 文本内容为空")
+            error_response = {
+                "status": "error",
+                "error": "empty_text",
+                "message": "文本内容不能为空"
+            }
             return {
                 "statusCode": 400,
-                "body": json.dumps({
-                    "status": "error",
-                    "error": "empty_text",
-                    "message": "文本内容不能为空"
-                }, ensure_ascii=False),
+                "body": json.dumps(error_response, ensure_ascii=False),
                 "headers": {
                     "Content-Type": "application/json; charset=utf-8",
                     "Access-Control-Allow-Origin": "*"
@@ -779,14 +782,15 @@ def handler(request):
             )
         except Exception as e:
             log_debug(f"生成器初始化错误: {str(e)}")
+            error_response = {
+                "status": "error",
+                "error": "generator_init_failed",
+                "message": "生成器初始化失败",
+                "trace": traceback.format_exc()
+            }
             return {
                 "statusCode": 500,
-                "body": json.dumps({
-                    "status": "error",
-                    "error": "generator_init_failed",
-                    "message": "生成器初始化失败",
-                    "trace": traceback.format_exc()
-                }, ensure_ascii=False),
+                "body": json.dumps(error_response, ensure_ascii=False),
                 "headers": {
                     "Content-Type": "application/json; charset=utf-8",
                     "Access-Control-Allow-Origin": "*"
@@ -797,7 +801,20 @@ def handler(request):
         try:
             result = generator.process_text(text)
             if not result.get("success", False):
-                raise Exception(result.get("error", "未知错误"))
+                error_response = {
+                    "status": "error",
+                    "error": "text_processing_failed",
+                    "message": result.get("error", "未知错误"),
+                    "trace": result.get("trace", "")
+                }
+                return {
+                    "statusCode": 500,
+                    "body": json.dumps(error_response, ensure_ascii=False),
+                    "headers": {
+                        "Content-Type": "application/json; charset=utf-8",
+                        "Access-Control-Allow-Origin": "*"
+                    }
+                }
             
             # 构建响应
             response_data = {
@@ -820,14 +837,15 @@ def handler(request):
             }
         except Exception as e:
             log_debug(f"文本处理错误: {str(e)}")
+            error_response = {
+                "status": "error",
+                "error": "text_processing_failed",
+                "message": "文本处理失败",
+                "trace": traceback.format_exc()
+            }
             return {
                 "statusCode": 500,
-                "body": json.dumps({
-                    "status": "error",
-                    "error": "text_processing_failed",
-                    "message": "文本处理失败",
-                    "trace": traceback.format_exc()
-                }, ensure_ascii=False),
+                "body": json.dumps(error_response, ensure_ascii=False),
                 "headers": {
                     "Content-Type": "application/json; charset=utf-8",
                     "Access-Control-Allow-Origin": "*"
@@ -836,14 +854,15 @@ def handler(request):
     except Exception as e:
         log_debug(f"处理请求时出错: {str(e)}")
         log_debug(traceback.format_exc())
+        error_response = {
+            "status": "error",
+            "error": "internal_server_error",
+            "message": "服务器内部错误",
+            "trace": traceback.format_exc()
+        }
         return {
             "statusCode": 500,
-            "body": json.dumps({
-                "status": "error",
-                "error": "internal_server_error",
-                "message": "服务器内部错误",
-                "trace": traceback.format_exc()
-            }, ensure_ascii=False),
+            "body": json.dumps(error_response, ensure_ascii=False),
             "headers": {
                 "Content-Type": "application/json; charset=utf-8",
                 "Access-Control-Allow-Origin": "*"
