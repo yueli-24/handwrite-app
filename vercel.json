@@ -4,9 +4,7 @@
       "maxDuration": 30,
       "memory": 2048
     }
-  }
-}
-{
+  },
   "builds": [
     { 
       "src": "api/python/*.py", 
