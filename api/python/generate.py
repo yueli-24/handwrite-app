@@ -591,6 +591,7 @@ class HandwritingGenerator:
             return image
         except Exception as e:
             log_debug(f"创建预览图像时出错: {str(e)}")
+            log_debug(traceback.format_exc())
             raise
 
     def convert_to_center_coordinates(self, x, y):
