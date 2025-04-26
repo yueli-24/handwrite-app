@@ -316,12 +316,15 @@ class HandwritingGenerator:
         ]
     
     def process_text(self, text: str, max_pages: int = 3) -> Tuple[List[str], List[str]]:
-        """处理文本，生成G代码和预览图像，限制最大页数"""
         try:
             log_debug("开始处理文本")
             preview_base64 = []
             gcode_content = []
             
+            # エラー処理を追加
+            if not text:
+                raise ValueError("テキストが空です")
+                
             # 处理文本
             lines = text.split('\n')
             for line in lines:
