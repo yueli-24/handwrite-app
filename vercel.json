@@ -14,7 +14,7 @@
   "routes": [
     { 
       "src": "/api/generate", 
-      "dest": "/api/python/generate.py",
+      "dest": "/api/python/index.py",
       "methods": ["POST"]
     },
     { "src": "/(.*)", "dest": "/$1" }
