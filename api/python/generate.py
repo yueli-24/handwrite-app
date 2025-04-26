@@ -739,10 +739,20 @@ def handler(request):
         try:
             result = generator.process_text(text)
             if not result.get("success", False):
-                raise Exception(result.get("error", "未知错误"))
+                error_message = result.get("error", "未知错误")
+                log_debug(f"文本处理失败: {error_message}")
+                return {
+                    "statusCode": 500,
+                    "body": json.dumps({
+                        "status": "error",
+                        "error": "text_processing_failed",
+                        "message": error_message
+                    }),
+                    "headers": {"Content-Type": "application/json"}
+                }
             
             # 返回响应
-            return {
+            response = {
                 "statusCode": 200,
                 "body": json.dumps({
                     "status": "success",
@@ -751,6 +761,8 @@ def handler(request):
                 }),
                 "headers": {"Content-Type": "application/json"}
             }
+            log_debug(f"响应数据: {response}")
+            return response
         except Exception as e:
             log_debug(f"文本处理错误: {str(e)}")
             return {
