@@ -337,7 +337,7 @@ class HandwritingGenerator:
                         try:
                             preview_img = self.create_preview(max_pages)
                             buffered = BytesIO()
-                            preview_img.save(buffered, format="PNG", optimize=True, quality=75)
+                            preview_img.save(buffered, format="PNG")
                             img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                             preview_base64.append(img_str)
                             log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -365,7 +365,7 @@ class HandwritingGenerator:
                             try:
                                 preview_img = self.create_preview(max_pages)
                                 buffered = BytesIO()
-                                preview_img.save(buffered, format="PNG", optimize=True, quality=75)
+                                preview_img.save(buffered, format="PNG")
                                 img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                                 preview_base64.append(img_str)
                                 log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -401,7 +401,7 @@ class HandwritingGenerator:
                     try:
                         preview_img = self.create_preview(max_pages)
                         buffered = BytesIO()
-                        preview_img.save(buffered, format="PNG", optimize=True, quality=75)
+                        preview_img.save(buffered, format="PNG")
                         img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                         preview_base64.append(img_str)
                         log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -419,7 +419,7 @@ class HandwritingGenerator:
                 try:
                     preview_img = self.create_preview(max_pages)
                     buffered = BytesIO()
-                    preview_img.save(buffered, format="PNG", optimize=True, quality=75)
+                    preview_img.save(buffered, format="PNG")
                     img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                     preview_base64.append(img_str)
                     log_debug(f"预览图像编码完成，长度: {len(img_str)}")
