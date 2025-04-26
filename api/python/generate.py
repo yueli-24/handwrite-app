@@ -337,7 +337,7 @@ class HandwritingGenerator:
                         try:
                             preview_img = self.create_preview(max_pages)
                             buffered = BytesIO()
-                            preview_img.save(buffered, format="PNG")
+                            preview_img.save(buffered, format="PNG", optimize=True, quality=75)
                             img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                             preview_base64.append(img_str)
                             log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -365,7 +365,7 @@ class HandwritingGenerator:
                             try:
                                 preview_img = self.create_preview(max_pages)
                                 buffered = BytesIO()
-                                preview_img.save(buffered, format="PNG")
+                                preview_img.save(buffered, format="PNG", optimize=True, quality=75)
                                 img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                                 preview_base64.append(img_str)
                                 log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -401,7 +401,7 @@ class HandwritingGenerator:
                     try:
                         preview_img = self.create_preview(max_pages)
                         buffered = BytesIO()
-                        preview_img.save(buffered, format="PNG")
+                        preview_img.save(buffered, format="PNG", optimize=True, quality=75)
                         img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                         preview_base64.append(img_str)
                         log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -419,7 +419,7 @@ class HandwritingGenerator:
                 try:
                     preview_img = self.create_preview(max_pages)
                     buffered = BytesIO()
-                    preview_img.save(buffered, format="PNG")
+                    preview_img.save(buffered, format="PNG", optimize=True, quality=75)
                     img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
                     preview_base64.append(img_str)
                     log_debug(f"预览图像编码完成，长度: {len(img_str)}")
@@ -509,24 +509,22 @@ class HandwritingGenerator:
     def create_preview(self, max_pages: int = 3) -> Image.Image:
         """创建预览图像，限制最大页数"""
         try:
-            # 使用300 DPI提高清晰度
-            px_per_mm = 11.811  # 300 DPI / 25.4 mm
-            width_px = int(self.paper_width * px_per_mm)
-            height_px = int(self.paper_height * px_per_mm)
+            # 提高DPI以提高清晰度
+            dpi = 72  # 提高到72 DPI
+            width_px = int(self.paper_width * dpi / 25.4)
+            height_px = int(self.paper_height * dpi / 25.4)
             
             log_debug(f"创建预览图像: {width_px}x{height_px} 像素")
-            log_debug(f"纸张尺寸: {self.paper_width}x{self.paper_height}mm")
-            log_debug(f"开始位置: X={self.margin_left}mm, Y={self.margin_top}mm")
             
             # 创建白色背景图像
             image = Image.new('RGB', (width_px, height_px), 'white')
             draw = ImageDraw.Draw(image)
             
             # 计算边距（像素单位）
-            margin_top_px = int(self.margin_top * px_per_mm)
-            margin_right_px = int(self.margin_right * px_per_mm)
-            margin_left_px = int(self.margin_left * px_per_mm)
-            margin_bottom_px = int(self.margin_bottom * px_per_mm)
+            margin_top_px = int(self.margin_top * dpi / 25.4)
+            margin_right_px = int(self.margin_right * dpi / 25.4)
+            margin_left_px = int(self.margin_left * dpi / 25.4)
+            margin_bottom_px = int(self.margin_bottom * dpi / 25.4)
             
             # 绘制边距区域（浅灰色）
             draw.rectangle([0, 0, width_px, margin_top_px], fill=(240, 240, 240))
@@ -541,6 +539,11 @@ class HandwritingGenerator:
             # 增加处理的G代码行数限制
             max_lines = 5000
             processed_lines = 0
+            
+            # 计算缩放比例和偏移
+            scale = dpi / 25.4  # 毫米到像素的转换比例
+            offset_x = self.center_x * scale
+            offset_y = self.center_y * scale
             
             for line in self.gcode:
                 if processed_lines >= max_lines:
@@ -562,9 +565,9 @@ class HandwritingGenerator:
                                 pen_down = z_val < 2.5
                         
                         if x_val is not None and y_val is not None:
-                            # 转换坐标到像素，考虑中心偏移和缩放
-                            x_px = int((x_val + self.center_x) * px_per_mm)
-                            y_px = int((self.center_y - y_val) * px_per_mm)
+                            # 转换坐标到像素，考虑中心偏移
+                            x_px = int(x_val * scale + offset_x)
+                            y_px = int(-y_val * scale + offset_y)  # Y轴反转
                             
                             # 确保坐标在图像范围内
                             x_px = max(0, min(x_px, width_px - 1))
@@ -591,7 +594,6 @@ class HandwritingGenerator:
             return image
         except Exception as e:
             log_debug(f"创建预览图像时出错: {str(e)}")
-            log_debug(traceback.format_exc())
             raise
 
     def convert_to_center_coordinates(self, x, y):
@@ -672,8 +674,7 @@ def handler(request):
                 "body": json.dumps({
                     "status": "error",
                     "error": "invalid_request",
-                    "message": "无效的请求格式",
-                    "trace": str(e)
+                    "message": "无效的请求格式"
                 }),
                 "headers": {"Content-Type": "application/json"}
             }
@@ -740,21 +741,10 @@ def handler(request):
         try:
             result = generator.process_text(text)
             if not result.get("success", False):
-                error_message = result.get("error", "未知错误")
-                log_debug(f"文本处理失败: {error_message}")
-                return {
-                    "statusCode": 500,
-                    "body": json.dumps({
-                        "status": "error",
-                        "error": "text_processing_failed",
-                        "message": error_message,
-                        "trace": result.get("trace", "")
-                    }),
-                    "headers": {"Content-Type": "application/json"}
-                }
+                raise Exception(result.get("error", "未知错误"))
             
             # 返回响应
-            response = {
+            return {
                 "statusCode": 200,
                 "body": json.dumps({
                     "status": "success",
@@ -763,8 +753,6 @@ def handler(request):
                 }),
                 "headers": {"Content-Type": "application/json"}
             }
-            log_debug(f"响应数据: {response}")
-            return response
         except Exception as e:
             log_debug(f"文本处理错误: {str(e)}")
             return {
