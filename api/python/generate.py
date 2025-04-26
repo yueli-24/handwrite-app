@@ -672,7 +672,8 @@ def handler(request):
                 "body": json.dumps({
                     "status": "error",
                     "error": "invalid_request",
-                    "message": "无效的请求格式"
+                    "message": "无效的请求格式",
+                    "trace": str(e)
                 }),
                 "headers": {"Content-Type": "application/json"}
             }
@@ -746,7 +747,8 @@ def handler(request):
                     "body": json.dumps({
                         "status": "error",
                         "error": "text_processing_failed",
-                        "message": error_message
+                        "message": error_message,
+                        "trace": result.get("trace", "")
                     }),
                     "headers": {"Content-Type": "application/json"}
                 }
