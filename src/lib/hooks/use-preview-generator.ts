@@ -68,9 +68,9 @@ export const usePreviewGenerator = () => {
         paperSize
       });
 
-      // 添加超时处理
+      // 增加超时时间到60秒
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
       try {
         const response = await fetch('/api/generate', {

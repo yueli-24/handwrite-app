@@ -13,7 +13,6 @@ import random
 import math
 import functools
 from typing import Any, Dict, List, Tuple, Union
-from http.server import BaseHTTPRequestHandler
 
 # 调试信息
 DEBUG = True
@@ -177,18 +176,18 @@ class StrokeWriter:
         return contour
 
     def get_random_spacing(self, char_width=None):
-        """文字サイズに比例したランダムな文字間隔を生成"""
+        """生成与字符大小成比例的随机字符间距"""
         if char_width is None:
-            char_width = self.char_size/10  # デフォルトサイズ
+            char_width = self.char_size/10  # 默认大小
         
-        # 文字幅に基づいて間隔を計算
-        min_spacing = char_width * self.spacing_ratio_min * 10  # 10倍スケールに戻す
+        # 基于字符宽度计算间距
+        min_spacing = char_width * self.spacing_ratio_min * 10  # 10倍缩放
         max_spacing = char_width * self.spacing_ratio_max * 10
         
         return random.uniform(min_spacing, max_spacing)
 
     def get_vertical_wobble(self):
-        """ランダムな上下の揺れを生成"""
+        """生成随机垂直抖动"""
         return random.uniform(self.vertical_wobble_min, self.vertical_wobble_max) / 10
 
     def generate_gcode(self, contour, start_x, start_y, vertical_offset=0, scale=1.0):
@@ -316,7 +315,6 @@ class HandwritingGenerator:
         ]
     
     def process_text(self, text: str, max_pages: int = 3) -> Dict[str, Any]:
-        """处理文本，生成G代码和预览图像，限制最大页数"""
         try:
             log_debug("开始处理文本")
             preview_base64 = []
@@ -325,7 +323,7 @@ class HandwritingGenerator:
             # エラー処理を追加
             if not text:
                 raise ValueError("テキストが空です")
-            
+                
             # 处理文本
             lines = text.split('\n')
             for line in lines:
@@ -431,94 +429,54 @@ class HandwritingGenerator:
                 
                 gcode_content.append('\n'.join(self.gcode))
             
-            log_debug(f"文本处理完成，生成了 {len(preview_base64)} 页")
             return {
                 "success": True,
-                "gcode": gcode_content,
-                "previews": preview_base64,
-                "page_count": len(preview_base64)
+                "previewBase64": preview_base64,
+                "gcodeContent": gcode_content
             }
         except Exception as e:
             log_debug(f"处理文本时出错: {str(e)}")
+            log_debug(traceback.format_exc())
             return {
                 "success": False,
                 "error": str(e),
-                "stack": traceback.format_exc()
+                "trace": traceback.format_exc()
             }
-    
+
     def get_font_strokes(self, char: str) -> Tuple[List[np.ndarray], Tuple[int, int, int, int]]:
-        """使用Pillow替代scikit-image"""
+        """获取字体笔画"""
         img_size = (self.char_size*2, self.char_size*2)
         image = Image.new('L', img_size, 255)
         draw = ImageDraw.Draw(image)
         
-        try:
-            # 尝试使用加载的字体
-            bbox = draw.textbbox((0,0), char, font=self.font)
-        except Exception as e:
-            log_debug(f"使用字体绘制字符失败: {str(e)}")
-            # 使用默认字体
-            bbox = draw.textbbox((0,0), char)
-        
+        # 绘制文字
+        bbox = draw.textbbox((0,0), char, font=self.font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
         x = (img_size[0] - text_width) // 2
         y = (img_size[1] - text_height) // 2
         
-        try:
-            # 尝试使用加载的字体
-            draw.text((x,y), char, font=self.font, fill=0)
-        except Exception as e:
-            log_debug(f"使用字体绘制字符失败: {str(e)}")
-            # 使用默认字体
-            draw.text((x,y), char, fill=0)
+        draw.text((x,y), char, font=self.font, fill=0)
         
         # 使用Pillow和numpy处理图像
         img_array = np.array(image)
         # 二值化
         binary = img_array < 128
-        # 骨架化（简化版）
-        skeleton = self.skeletonize(binary)
-        # 轮廓提取
-        contours = self.find_contours(skeleton)
         
-        return contours, (x,y,text_width,text_height)
-
-    def skeletonize(self, binary):
-        """简化版的骨架化算法"""
-        skeleton = binary.copy()
-        while True:
-            eroded = self.erode(skeleton)
-            if np.all(eroded == 0):
-                break
-            skeleton = eroded
-        return skeleton
-
-    def erode(self, img):
-        """简化版的腐蚀操作"""
-        kernel = np.ones((3,3), dtype=np.uint8)
-        eroded = np.zeros_like(img)
-        for i in range(1, img.shape[0]-1):
-            for j in range(1, img.shape[1]-1):
-                if img[i,j] and np.all(img[i-1:i+2, j-1:j+2] * kernel):
-                    eroded[i,j] = 1
-        return eroded
-
-    def find_contours(self, binary):
-        """简化版的轮廓提取"""
+        # 简化版的轮廓提取
         contours = []
         visited = np.zeros_like(binary, dtype=bool)
         
         for i in range(binary.shape[0]):
             for j in range(binary.shape[1]):
                 if binary[i,j] and not visited[i,j]:
-                    contour = self.trace_contour(binary, visited, i, j)
+                    contour = self._trace_contour(binary, visited, i, j)
                     if len(contour) > 2:
                         contours.append(np.array(contour))
         
-        return contours
+        return contours, (x, y, text_width, text_height)
 
-    def trace_contour(self, binary, visited, start_i, start_j):
+    def _trace_contour(self, binary: np.ndarray, visited: np.ndarray, start_i: int, start_j: int) -> List[List[int]]:
         """追踪单个轮廓"""
         contour = []
         i, j = start_i, start_j
@@ -548,57 +506,11 @@ class HandwritingGenerator:
         
         return contour
 
-    def get_random_spacing(self, char_width=None):
-        """生成与字符大小成比例的随机字符间距"""
-        if char_width is None:
-            char_width = self.char_size/10  # 默认大小
-        
-        # 基于字符宽度计算间距
-        min_spacing = char_width * self.spacing_ratio_min * 10  # 10倍缩放
-        max_spacing = char_width * self.spacing_ratio_max * 10
-        
-        return random.uniform(min_spacing, max_spacing)
-
-    def get_vertical_wobble(self):
-        """生成随机垂直抖动"""
-        return random.uniform(self.vertical_wobble_min, self.vertical_wobble_max) / 10
-
-    def generate_gcode(self, contour, start_x, start_y, vertical_offset=0, scale=1.0):
-        """輪郭からG-codeを生成（中心原点基準）"""
-        points = np.array(contour)
-        if len(points) < 2:
-            return []
-        
-        stroke_commands = []
-        
-        # 開始点への移動（ペンを上げた状態で）
-        x, y = points[0]
-        abs_x = start_x + x*scale/10
-        abs_y = start_y + y*scale/10 + vertical_offset  # 上下の揺れを追加
-        x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
-        stroke_commands.append(f"G0 X{x_pos:.3f} Y{y_pos:.3f} F{self.move_speed}")
-        
-        # ペンを下ろす
-        stroke_commands.append(f"G1 G90 Z{self.pen_down_z} F{self.pen_speed}")
-        
-        # ストロークの描画
-        for point in points[1:]:
-            x, y = point
-            abs_x = start_x + x*scale/10
-            abs_y = start_y + y*scale/10 + vertical_offset  # 上下の揺れを追加
-            x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
-            stroke_commands.append(f"G1 X{x_pos:.3f} Y{y_pos:.3f} F{self.move_speed}")
-        
-        # ペンを上げる
-        stroke_commands.append(f"G1 G90 Z{self.pen_up_z} F{self.pen_speed}")
-        
-        return stroke_commands
-
     def create_preview(self, max_pages: int = 3) -> Image.Image:
         """创建预览图像，限制最大页数"""
         try:
             # 进一步降低DPI以减小图像大小
-            dpi = 12  # 降低到50 DPI / 25.4 mm
+            dpi = 12  # 降低到12 DPI
             width_px = int(self.paper_width * dpi / 25.4)
             height_px = int(self.paper_height * dpi / 25.4)
             
@@ -677,121 +589,163 @@ class HandwritingGenerator:
         center_relative_y = -(y - self.center_y)  # Y轴向上为负
         return center_relative_x, center_relative_y
 
-def safe_response(func):
-    """装饰器：确保所有响应都是有效的JSON格式"""
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            log_debug(f"处理错误: {str(e)}")
-            return {
-                "status": "error",
-                "error": "internal_error",
-                "message": str(e)
-            }
-    return wrapper
-
-class Handler(BaseHTTPRequestHandler):
-    def send_json_response(self, data, status=200):
-        """统一发送JSON响应"""
-        try:
-            self.send_response(status)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response_str = json.dumps(data, ensure_ascii=False)
-            self.wfile.write(response_str.encode('utf-8'))
-            log_debug(f"发送响应: {response_str[:100]}...")
-        except Exception as e:
-            log_debug(f"发送响应失败: {str(e)}")
-
-    @safe_response
-    def do_POST(self):
-        """处理POST请求"""
-        log_debug("===== 开始处理请求 =====")
+    def generate_gcode(self, contour, start_x, start_y, vertical_offset=0, scale=1.0):
+        """从轮廓生成G代码（以中心为原点）"""
+        points = np.array(contour)
+        if len(points) < 2:
+            return []
         
-        # 解析请求数据
-        try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data)
-            log_debug(f"请求数据: {data}")
-        except Exception as e:
-            return self.send_json_response({
-                "status": "error",
-                "error": "invalid_request",
-                "message": "无效的请求格式"
-            }, 400)
+        stroke_commands = []
+        
+        # 移动到起始点（笔抬起状态）
+        x, y = points[0]
+        abs_x = start_x + x*scale/10
+        abs_y = start_y + y*scale/10 + vertical_offset  # 添加垂直抖动
+        x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
+        stroke_commands.append(f"G0 X{x_pos:.3f} Y{y_pos:.3f} F{self.move_speed}")
+        
+        # 落笔
+        stroke_commands.append(f"G1 G90 Z{self.pen_down_z} F{self.pen_speed}")
+        
+        # 绘制笔画
+        for point in points[1:]:
+            x, y = point
+            abs_x = start_x + x*scale/10
+            abs_y = start_y + y*scale/10 + vertical_offset  # 添加垂直抖动
+            x_pos, y_pos = self.convert_to_center_coordinates(abs_x, abs_y)
+            stroke_commands.append(f"G1 X{x_pos:.3f} Y{y_pos:.3f} F{self.move_speed}")
+        
+        # 抬笔
+        stroke_commands.append(f"G1 G90 Z{self.pen_up_z} F{self.pen_speed}")
+        
+        return stroke_commands
 
+# Vercel Serverless Function 处理函数
+def handler(request):
+    try:
+        # 记录详细的环境信息，帮助调试
+        log_debug("===== 开始处理请求 =====")
+        log_debug(f"当前工作目录: {os.getcwd()}")
+        log_debug(f"目录内容: {os.listdir('.')}")
+        log_debug(f"Python版本: {sys.version}")
+        log_debug(f"Python路径: {sys.path}")
+        
+        # 获取请求体
+        try:
+            body = request.get('body', {})
+            if isinstance(body, str):
+                data = json.loads(body)
+            else:
+                data = body
+            log_debug(f"请求数据: {data}")
+        except (KeyError, ValueError) as e:
+            log_debug(f"请求体解析错误: {str(e)}")
+            return {
+                "statusCode": 400,
+                "body": json.dumps({
+                    "status": "error",
+                    "error": "invalid_request",
+                    "message": "无效的请求格式"
+                }),
+                "headers": {"Content-Type": "application/json"}
+            }
+        
         # 验证必要参数
         text = data.get('text', '')
         if not text:
-            return self.send_json_response({
-                "status": "error",
-                "error": "empty_text",
-                "message": "文本内容不能为空"
-            }, 400)
-
-        # 初始化生成器
+            log_debug("错误: 文本内容为空")
+            return {
+                "statusCode": 400,
+                "body": json.dumps({
+                    "status": "error",
+                    "error": "empty_text",
+                    "message": "文本内容不能为空"
+                }),
+                "headers": {"Content-Type": "application/json"}
+            }
+        
+        # 创建生成器实例
         try:
-            generator = self._init_generator(data)
+            font_paths = [
+                os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
+                os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
+                os.path.join(os.getcwd(), 'しょかきさらり行体.ttf'),
+                '/var/task/public/fonts/しょかきさらり行体.ttf',
+                '/var/task/fonts/しょかきさらり行体.ttf',
+                '/var/task/しょかきさらり行体.ttf'
+            ]
+            
+            font_path = None
+            for path in font_paths:
+                if os.path.exists(path):
+                    font_path = path
+                    log_debug(f"找到字体文件: {path}")
+                    break
+            
+            if not font_path:
+                log_debug("未找到字体文件，使用默认字体")
+                font_path = None  # 使用默认字体
+            
+            generator = HandwritingGenerator(
+                font_path=font_path,
+                font_size=data.get('fontSize', 8),
+                margin_top=data.get('marginTop', 35),
+                margin_bottom=data.get('marginBottom', 25),
+                margin_left=data.get('marginLeft', 30),
+                margin_right=data.get('marginRight', 30),
+                paper_size=data.get('paperSize', 'A4')
+            )
         except Exception as e:
-            return self.send_json_response({
-                "status": "error",
-                "error": "init_failed",
-                "message": "生成器初始化失败"
-            }, 500)
-
+            log_debug(f"生成器初始化错误: {str(e)}")
+            return {
+                "statusCode": 500,
+                "body": json.dumps({
+                    "status": "error",
+                    "error": "generator_init_failed",
+                    "message": "生成器初始化失败",
+                    "trace": traceback.format_exc()
+                }),
+                "headers": {"Content-Type": "application/json"}
+            }
+        
         # 处理文本
         try:
             result = generator.process_text(text)
             if not result.get("success", False):
-                raise Exception(result.get("error", "处理失败"))
+                raise Exception(result.get("error", "未知错误"))
             
-            return self.send_json_response({
-                "status": "success",
-                "data": {
-                    "gcode": result.get("gcode", []),
-                    "preview": result.get("previews", [])
-                }
-            })
+            # 返回响应
+            return {
+                "statusCode": 200,
+                "body": json.dumps({
+                    "status": "success",
+                    "previewBase64": result.get("previewBase64", []),
+                    "gcodeContent": result.get("gcodeContent", [])
+                }),
+                "headers": {"Content-Type": "application/json"}
+            }
         except Exception as e:
-            return self.send_json_response({
+            log_debug(f"文本处理错误: {str(e)}")
+            return {
+                "statusCode": 500,
+                "body": json.dumps({
+                    "status": "error",
+                    "error": "text_processing_failed",
+                    "message": "文本处理失败",
+                    "trace": traceback.format_exc()
+                }),
+                "headers": {"Content-Type": "application/json"}
+            }
+    except Exception as e:
+        log_debug(f"处理请求时出错: {str(e)}")
+        log_debug(traceback.format_exc())
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
                 "status": "error",
-                "error": "process_failed",
-                "message": "文本处理失败"
-            }, 500)
-
-    def _init_generator(self, data):
-        """初始化生成器"""
-        font_path = self._find_font()
-        return HandwritingGenerator(
-            font_path=font_path,
-            font_size=data.get('fontSize', 8),
-            margin_top=data.get('marginTop', 35),
-            margin_bottom=data.get('marginBottom', 25),
-            margin_left=data.get('marginLeft', 30),
-            margin_right=data.get('marginRight', 30),
-            paper_size=data.get('paperSize', 'A4')
-        )
-
-    def _find_font(self):
-        """查找字体文件"""
-        font_paths = [
-            os.path.join(os.getcwd(), 'public', 'fonts', 'しょかきさらり行体.ttf'),
-            os.path.join(os.getcwd(), 'fonts', 'しょかきさらり行体.ttf'),
-            os.path.join(os.getcwd(), 'しょかきさらり行体.ttf'),
-            '/var/task/public/fonts/しょかきさらり行体.ttf',
-            '/var/task/fonts/しょかきさらり行体.ttf',
-            '/var/task/しょかきさらり行体.ttf'
-        ]
-        
-        for path in font_paths:
-            if os.path.exists(path):
-                log_debug(f"找到字体文件: {path}")
-                return path
-        
-        log_debug("未找到字体文件，使用默认字体")
-        return None
-
-# 导出处理程序
-handler = Handler
+                "error": "internal_server_error",
+                "message": "服务器内部错误",
+                "trace": traceback.format_exc()
+            }),
+            "headers": {"Content-Type": "application/json"}
+        }
