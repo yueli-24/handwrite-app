@@ -693,11 +693,27 @@ def handler(request):
         try:
             body = request.get('body', {})
             if isinstance(body, str):
-                data = json.loads(body)
+                try:
+                    data = json.loads(body)
+                except json.JSONDecodeError as e:
+                    log_debug(f"JSON解析错误: {str(e)}")
+                    return {
+                        "statusCode": 400,
+                        "body": json.dumps({
+                            "status": "error",
+                            "error": "invalid_json",
+                            "message": "无效的JSON格式",
+                            "trace": str(e)
+                        }, ensure_ascii=False),
+                        "headers": {
+                            "Content-Type": "application/json; charset=utf-8",
+                            "Access-Control-Allow-Origin": "*"
+                        }
+                    }
             else:
                 data = body
             log_debug(f"请求数据: {data}")
-        except (KeyError, ValueError) as e:
+        except Exception as e:
             log_debug(f"请求体解析错误: {str(e)}")
             return {
                 "statusCode": 400,
@@ -783,21 +799,25 @@ def handler(request):
             if not result.get("success", False):
                 raise Exception(result.get("error", "未知错误"))
             
+            # 构建响应
+            response_data = {
+                "status": "success",
+                "previewBase64": result.get("previewBase64", []),
+                "gcodeContent": result.get("gcodeContent", [])
+            }
+            
+            # 记录响应数据
+            log_debug(f"响应数据: {json.dumps(response_data, ensure_ascii=False)}")
+            
             # 返回响应
-            response = {
+            return {
                 "statusCode": 200,
-                "body": json.dumps({
-                    "status": "success",
-                    "previewBase64": result.get("previewBase64", []),
-                    "gcodeContent": result.get("gcodeContent", [])
-                }, ensure_ascii=False),
+                "body": json.dumps(response_data, ensure_ascii=False),
                 "headers": {
                     "Content-Type": "application/json; charset=utf-8",
                     "Access-Control-Allow-Origin": "*"
                 }
             }
-            log_debug(f"返回响应: {response}")
-            return response
         except Exception as e:
             log_debug(f"文本处理错误: {str(e)}")
             return {
