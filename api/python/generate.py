@@ -431,10 +431,19 @@ class HandwritingGenerator:
                 gcode_content.append('\n'.join(self.gcode))
             
             log_debug(f"文本处理完成，生成了 {len(preview_base64)} 页")
-            return gcode_content, preview_base64
+            return {
+                "success": True,
+                "gcode": gcode_content,
+                "previews": preview_base64,
+                "page_count": len(preview_base64)
+            }
         except Exception as e:
             log_debug(f"处理文本时出错: {str(e)}")
-            raise
+            return {
+                "success": False,
+                "error": str(e),
+                "stack": traceback.format_exc()
+            }
     
     def get_font_strokes(self, char: str) -> Tuple[List[np.ndarray], Tuple[int, int, int, int]]:
         """使用Pillow替代scikit-image"""
