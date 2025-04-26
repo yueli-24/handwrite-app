@@ -540,9 +540,10 @@ class HandwritingGenerator:
             max_lines = 5000
             processed_lines = 0
             
-            # 计算缩放比例
-            scale_x = width_px / self.paper_width
-            scale_y = height_px / self.paper_height
+            # 计算缩放比例和偏移
+            scale = dpi / 25.4  # 毫米到像素的转换比例
+            offset_x = self.center_x * scale
+            offset_y = self.center_y * scale
             
             for line in self.gcode:
                 if processed_lines >= max_lines:
@@ -564,9 +565,9 @@ class HandwritingGenerator:
                                 pen_down = z_val < 2.5
                         
                         if x_val is not None and y_val is not None:
-                            # 转换坐标到像素，考虑边距和缩放
-                            x_px = int((x_val + self.center_x) * scale_x)
-                            y_px = int((self.center_y - y_val) * scale_y)
+                            # 转换坐标到像素，考虑中心偏移
+                            x_px = int(x_val * scale + offset_x)
+                            y_px = int(-y_val * scale + offset_y)  # Y轴反转
                             
                             # 确保坐标在图像范围内
                             x_px = max(0, min(x_px, width_px - 1))
