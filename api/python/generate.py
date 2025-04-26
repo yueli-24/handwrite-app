@@ -315,7 +315,8 @@ class HandwritingGenerator:
             f"G1 X{self.margin_left} Y{self.margin_top} F3000 ; 移动到起始位置"
         ]
     
-    def process_text(self, text: str, max_pages: int = 3) -> Tuple[List[str], List[str]]:
+    def process_text(self, text: str, max_pages: int = 3) -> Dict[str, Any]:
+        """处理文本，生成G代码和预览图像，限制最大页数"""
         try:
             log_debug("开始处理文本")
             preview_base64 = []
@@ -324,7 +325,7 @@ class HandwritingGenerator:
             # エラー処理を追加
             if not text:
                 raise ValueError("テキストが空です")
-                
+            
             # 处理文本
             lines = text.split('\n')
             for line in lines:
@@ -822,7 +823,7 @@ class Handler(BaseHTTPRequestHandler):
                         "preview": preview_lines
                     }
                 }
-                response_str = json.dumps(response)
+                response_str = json.dumps(response, ensure_ascii=False)
                 log_debug(f"发送响应: {response_str[:100]}...")
                 self.wfile.write(response_str.encode('utf-8'))
                 log_debug("响应发送成功")
@@ -842,7 +843,7 @@ class Handler(BaseHTTPRequestHandler):
                     "error": "internal_server_error",
                     "message": "服务器内部错误"
                 }
-                self.wfile.write(json.dumps(response).encode('utf-8'))
+                self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
             except:
                 pass  # 如果响应已经发送，忽略错误
 
