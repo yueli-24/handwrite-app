@@ -790,7 +790,12 @@ class Handler(BaseHTTPRequestHandler):
             
             # 处理文本
             try:
-                gcode_lines, preview_lines = generator.process_text(text)
+                result = generator.process_text(text)
+                if not result.get("success", False):
+                    raise Exception(result.get("error", "未知错误"))
+                
+                gcode_lines = result.get("gcode", [])
+                preview_lines = result.get("previews", [])
                 log_debug(f"处理完成，生成 {len(gcode_lines)} 行 G 代码")
             except Exception as e:
                 log_debug(f"文本处理错误: {str(e)}")
